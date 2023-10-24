@@ -1,13 +1,13 @@
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat-square)](LICENSE)
 
-# ANS Data CoE Synapse SDLH (Strategic Data Lakehouse) Deployment
+# ANS CoE SDLH (Strategic Data Lakehouse) Synapse Deployment
 
 ## Overview
-This repo contains synapse config to support automated deployment of the ANS Data CoE SDLH framework.
-The primary usecase is to deploy this framework onto of an ANS Modern Data Plaform (MDP) 
+This repo contains synapse config to support automated deployment of the ANS CoE SDLH framework.
+The primary use case is to deploy this framework onto an existing ANS Modern Data Platform (MDP) deployment.
 
 ## End To End Deployment Flow
-![End To End](./diagram/dcoe_sdlh_deploy_end_to_end.png)
+![End To End](./diagram/sdlh_deploy_end_to_end.png)
 
 ## SDLH Benefits
 - **All the Data Lakehouse & Cloud benefits**
