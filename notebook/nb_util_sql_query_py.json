@@ -1,0 +1,439 @@
+{
+	"name": "nb_util_sql_query_py",
+	"properties": {
+		"folder": {
+			"name": "utils"
+		},
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": false,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "95e8e37a-1e53-4d67-ae92-49b57b740cc1"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": true,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "python"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## SDLH (Strategic Data Lakehouse) Utility\r\n",
+					"<p><b>Description: </b>Enter notebook decription</p>\r\n",
+					"<b>Parent Process: </b>SDLH Pipelines</p>\r\n",
+					"<table align=\"left\">\r\n",
+					" <thead>\r\n",
+					"  <tr>\r\n",
+					"   <th>Contributor</th>\r\n",
+					"   <th>Date</th>\r\n",
+					"   <th>Version</th>\r\n",
+					"   <th>Comment</th>\r\n",
+					"   <th>WorkItem No</th>\r\n",
+					"  </tr>\r\n",
+					" </thead>\r\n",
+					" <tbody>\r\n",
+					"  <tr>\r\n",
+					"   <td>Andrei Dumitru</td>\r\n",
+					"   <td>2022-12-09</td>\r\n",
+					"   <td>1.0</td>\r\n",
+					"   <td>Create initial release</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
+					"  <tr>\r\n",
+					"   <td>Darren Price</td>\r\n",
+					"   <td>2023-10-23</td>\r\n",
+					"   <td>2.0</td>\r\n",
+					"   <td>Updated for SDLH v2</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
+					" </tbody>\r\n",
+					"</table>"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"def create_serverless_databases_and_schemas(odbc_url:str, odbc_token:str, datalake_name: str, container_name: str) ->str:\r\n",
+					"    \"\"\"\r\n",
+					"    Creates serverless databases and schemas in the given Serverless SQL Pool, and configures them for use with Synapse Analytics.\r\n",
+					"\r\n",
+					"    Args:\r\n",
+					"        server (str): The name of the Serverless SQL endpoint to connect to.\r\n",
+					"        datalake_name (str): The name of the data lake to use.\r\n",
+					"        container_name (str): The name of the container to use.\r\n",
+					"\r\n",
+					"    Returns:\r\n",
+					"        str: Returns the External data source name created.\r\n",
+					"    \"\"\"\r\n",
+					"    serverless_databases_to_create = (df_objects_metadata_extracted\r\n",
+					"                                    .select(\"SERVERLESS_SQL_POOL_DATABASE\", \"SERVERLESS_SQL_POOL_SCHEMA\")\r\n",
+					"                                    .groupBy(\"SERVERLESS_SQL_POOL_DATABASE\")\r\n",
+					"                                    .agg(collect_list(\"SERVERLESS_SQL_POOL_SCHEMA\").alias(\"SERVERLESS_SQL_POOL_SCHEMA_LIST\"))\r\n",
+					"                                    .rdd\r\n",
+					"                                    .map(lambda row: (row[0], row[1]))\r\n",
+					"                                    .collectAsMap())\r\n",
+					"\r\n",
+					"    d = pyodbc.connect(odbc_url, attrs_before = { SQL_COPT_SS_ACCESS_TOKEN:odbc_token })\r\n",
+					"    d.autocommit = True\r\n",
+					"    cursor = d.cursor()\r\n",
+					"\r\n",
+					"    for serverless_sql_pool_database in serverless_databases_to_create.keys():\r\n",
+					"        create_database = f'''\r\n",
+					"            IF NOT EXISTS (SELECT [name] FROM sys.databases WHERE [name] = '{serverless_sql_pool_database}')\r\n",
+					"            BEGIN\r\n",
+					"                EXEC('CREATE DATABASE [{serverless_sql_pool_database}]')\r\n",
+					"            END;\r\n",
+					"        '''\r\n",
+					"        print(create_database)\r\n",
+					"        print('Database created: ', serverless_sql_pool_database)\r\n",
+					"        cursor.execute(create_database)\r\n",
+					"\r\n",
+					"        for serverless_sql_pool_schemas in serverless_databases_to_create.values():\r\n",
+					"            for serverless_sql_pool_schema in serverless_sql_pool_schemas:\r\n",
+					"                create_schema = f'''\r\n",
+					"                    USE [{serverless_sql_pool_database}];\r\n",
+					"                    IF NOT EXISTS (SELECT [name] FROM sys.schemas WHERE [name] = '{serverless_sql_pool_schema}')\r\n",
+					"                    BEGIN\r\n",
+					"                        EXEC('CREATE SCHEMA [{serverless_sql_pool_schema}]')\r\n",
+					"                    END\r\n",
+					"                '''\r\n",
+					"                print(create_schema)\r\n",
+					"                print(\"Schema created: \", serverless_sql_pool_schema)\r\n",
+					"                cursor.execute(create_schema)\r\n",
+					"    \r\n",
+					"        create_credential = f'''\r\n",
+					"            USE [{serverless_sql_pool_database}];\r\n",
+					"            IF NOT EXISTS (SELECT symmetric_key_id FROM sys.symmetric_keys WHERE symmetric_key_id = 101)\r\n",
+					"            BEGIN\r\n",
+					"                CREATE MASTER KEY\r\n",
+					"            END;\r\n",
+					"            IF NOT EXISTS (SELECT [name] from sys.database_scoped_credentials WHERE [name] = 'cred_managed_identity')\r\n",
+					"            BEGIN\r\n",
+					"                CREATE DATABASE SCOPED CREDENTIAL [cred_managed_identity]\r\n",
+					"                WITH IDENTITY = 'MANAGED IDENTITY'\r\n",
+					"            END;\r\n",
+					"        '''\r\n",
+					"        cursor.execute(create_credential)\r\n",
+					"\r\n",
+					"        external_data_source_name = f'exds_gen2_{container_name}'\r\n",
+					"\r\n",
+					"        create_exds = f'''\r\n",
+					"            IF NOT EXISTS (SELECT [name] FROM sys.external_data_sources WHERE [name] = '{external_data_source_name}')\r\n",
+					"            BEGIN\r\n",
+					"                CREATE EXTERNAL DATA SOURCE [{external_data_source_name}]\r\n",
+					"                WITH (\r\n",
+					"                    LOCATION = N'https://{datalake_name}.dfs.core.windows.net/{container_name}',\r\n",
+					"                    CREDENTIAL = [cred_managed_identity]\r\n",
+					"                );\r\n",
+					"            END;\r\n",
+					"        \r\n",
+					"            IF NOT EXISTS (SELECT [name] FROM sys.external_file_formats WHERE [name] = 'exff_csv')\r\n",
+					"            BEGIN\r\n",
+					"                CREATE EXTERNAL FILE FORMAT exff_csv\r\n",
+					"                WITH (\r\n",
+					"                    FORMAT_TYPE = DELIMITEDTEXT,\r\n",
+					"                    FORMAT_OPTIONS (FIELD_TERMINATOR = ','),\r\n",
+					"                    DATA_COMPRESSION = 'org.apache.hadoop.io.compress.GzipCodec'\r\n",
+					"                );\r\n",
+					"            END;\r\n",
+					"            IF NOT EXISTS (SELECT [name] FROM sys.external_file_formats WHERE [name] = 'exff_parquet')\r\n",
+					"            BEGIN\r\n",
+					"                CREATE EXTERNAL FILE FORMAT exff_parquet\r\n",
+					"                WITH (\r\n",
+					"                    FORMAT_TYPE = PARQUET,\r\n",
+					"                    DATA_COMPRESSION = 'org.apache.hadoop.io.compress.SnappyCodec'\r\n",
+					"                );\r\n",
+					"            END;\r\n",
+					"            IF NOT EXISTS (SELECT [name] FROM sys.external_file_formats WHERE [name] = 'exff_delta')\r\n",
+					"            BEGIN\r\n",
+					"                CREATE EXTERNAL FILE FORMAT exff_delta\r\n",
+					"                WITH (\r\n",
+					"                    FORMAT_TYPE = DELTA\r\n",
+					"                );\r\n",
+					"            END;\r\n",
+					"        '''\r\n",
+					"        cursor.execute(create_exds)\r\n",
+					"    d.close()\r\n",
+					"    return"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"External Tables"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#primary\r\n",
+					"def map_data_types(df:pyspark.sql.dataframe.DataFrame) -> pyspark.sql.dataframe.DataFrame:\r\n",
+					"    \"\"\"\r\n",
+					"    Maps data types from SQL Server or MySQL to datatypes supported in Serverless SQL Pool and makes formatting changes to column names and maximum length in a PySpark DataFrame.\r\n",
+					"\r\n",
+					"    Parameters:\r\n",
+					"    - df: PySpark DataFrame - the input DataFrame to be transformed\r\n",
+					"\r\n",
+					"    Returns:\r\n",
+					"    - PySpark DataFrame - the transformed DataFrame\r\n",
+					"\r\n",
+					"    The function performs the following transformations:\r\n",
+					"    - Maps data types based on a dictionary of mappings\r\n",
+					"    - Replaces spaces in column names with underscores\r\n",
+					"    - Changes the maximum length of columns with a length of \"-1\" to \"4000\"\r\n",
+					"    - Replaces \"varchar(4000)\" data type with \"varchar\"\r\n",
+					"    - Adds brackets to column names to make them SQL-safe\r\n",
+					"\r\n",
+					"    Example Usage:\r\n",
+					"    ```\r\n",
+					"    from pyspark.sql import SparkSession\r\n",
+					"    spark = SparkSession.builder.appName(\"MapDataTypes\").getOrCreate()\r\n",
+					"\r\n",
+					"    transformed_df = map_data_types(df) \r\n",
+					"    ```\r\n",
+					"    \"\"\"\r\n",
+					"    data_type_mappings = {\r\n",
+					"        \"nvarchar\": \"varchar\",\r\n",
+					"        \"nchar\": \"char\",\r\n",
+					"        \"ntext\": \"varchar\",\r\n",
+					"        \"text\": \"varchar\",\r\n",
+					"        \"geography\": \"varbinary\",\r\n",
+					"        \"geometry\": \"varbinary\",\r\n",
+					"        \"hierarchyid\": \"nvarchar(4000)\",\r\n",
+					"        \"image\": \"varbinary(4000)\",\r\n",
+					"        \"timestamp\": \"datetime2\",\r\n",
+					"        \"xml\": \"varchar\",\r\n",
+					"        \"double\":\"varchar(8000)\",\r\n",
+					"        \"longtext\": \"varchar(8000)\",\r\n",
+					"        \"integer\": \"int\",\r\n",
+					"        \"boolean\": \"bit\",\r\n",
+					"        \"timestamp without time zone\": \"datetime2\",\r\n",
+					"        \"ARRAY\": \"varchar(max)\",\r\n",
+					"        \"numeric\":\"varchar(8000)\",\r\n",
+					"        \"json\":\"varchar(max)\",\r\n",
+					"        \"mediumtext\":\"varchar\",\r\n",
+					"        \"tinytext\":\"varchar\",\r\n",
+					"        \"bigint\":\"DECIMAL(38, 18)\"\r\n",
+					"    }\r\n",
+					"    map_data_type_udf = udf(lambda data_type: data_type_mappings.get(data_type, data_type), StringType())\r\n",
+					"    df = df.withColumn(\"DATA_TYPE\", map_data_type_udf(col(\"DATA_TYPE\")))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", when(df[\"CHARACTER_MAXIMUM_LENGTH\"] == \"-1\" , \"MAX\").otherwise(df[\"CHARACTER_MAXIMUM_LENGTH\"]))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", when(df[\"CHARACTER_MAXIMUM_LENGTH\"] == \"null\" , \"8000\").otherwise(df[\"CHARACTER_MAXIMUM_LENGTH\"]))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", F.regexp_replace(col(\"CHARACTER_MAXIMUM_LENGTH\"), \"[\\$#,]\", \"\"))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", when(df[\"CHARACTER_MAXIMUM_LENGTH\"] == \"-4000\" , \"8000\").otherwise(df[\"CHARACTER_MAXIMUM_LENGTH\"]))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", when(col(\"CHARACTER_MAXIMUM_LENGTH\").cast(\"bigint\") >= 4000 , \"8000\").otherwise(df[\"CHARACTER_MAXIMUM_LENGTH\"]))\r\n",
+					"    df = df.withColumn(\"DATA_TYPE\", when(df[\"DATA_TYPE\"] == \"varchar(4000)\" , \"varchar\").otherwise(df[\"DATA_TYPE\"]))\r\n",
+					"    df = df.withColumn(\"DATA_TYPE\", when((col(\"DATA_TYPE\") == \"varchar\") & (col(\"CHARACTER_MAXIMUM_LENGTH\").isNull()) , \"varchar (8000)\").otherwise(df[\"DATA_TYPE\"]))\r\n",
+					"    df = df.withColumn(\"COLUMN_NAME\", regexp_replace(col(\"COLUMN_NAME\"), \" \", \"_\"))\r\n",
+					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", concat(lit(\"(\"), col(\"CHARACTER_MAXIMUM_LENGTH\"), lit(\")\")))\r\n",
+					"    df = df.withColumn(\"COLUMN_NAME\", lower(col(\"COLUMN_NAME\")))\r\n",
+					"    df = df.withColumn(\"COLUMN_NAME\", concat(lit(\"[\"), col(\"COLUMN_NAME\"), lit(\"]\")))\r\n",
+					"    return df"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#not logged\r\n",
+					"def ext_table_mapping(system:str) -> dict:\r\n",
+					"    '''\r\n",
+					"    This function uses the information schema from ADLS to create a dictionary containing all External Tables instructions\r\n",
+					"    The output of this will be used in the produceExternalTableDefinition function\r\n",
+					"\r\n",
+					"    Parameters:\r\n",
+					"    system (str) : the source system name\r\n",
+					"\r\n",
+					"    Returns:\r\n",
+					"    external_tables_instructions (dict) : dictionary with the following structure: {'table_name': ['columns_query', 'staged_file_path', 'schema']}\r\n",
+					"    '''\r\n",
+					"\r\n",
+					"\r\n",
+					"    external_tables_instructions = {}\r\n",
+					"\r\n",
+					"    unsuported_serverless_types = {\"(MAX)\" : \"(4000)\", \"(-1)\":\"\"}\r\n",
+					"    \r\n",
+					"    for table in tables_list:\r\n",
+					"        if information_schemas.select(\"CHARACTER_MAXIMUM_LENGTH\") in unsuported_serverless_types.keys():\r\n",
+					"            information_schemas[\"CHARACTER_MAXIMUM_LENGTH\"] = information_schemas.withColumn[\"CHARACTER_MAXIMUM_LENGTH\"].map(unsuported_serverless_types)\r\n",
+					"\r\n",
+					"        if information_schemas.select(\"CHARACTER_MAXIMUM_LENGTH\") == \"undefined\":\r\n",
+					"            query = information_schemas.select(concat_ws(\" \", information_schemas.COLUMN_NAME, information_schemas.DATA_TYPE).alias(\"QUERY\"), information_schemas.TABLE_NAME.alias(\"TABLE_NAME\"), information_schemas.COLUMN_NAME.alias(\"COLUMN_NAME\"), information_schemas.IS_NULLABLE.alias(\"IS_NULLABLE\"))\r\n",
+					"        elif information_schemas.select(\"CHARACTER_MAXIMUM_LENGTH\") != \"undefined\":\r\n",
+					"            query = information_schemas.select(concat_ws(\" \", information_schemas.COLUMN_NAME, information_schemas.DATA_TYPE, information_schemas.CHARACTER_MAXIMUM_LENGTH).alias(\"QUERY\"), information_schemas.TABLE_NAME.alias(\"TABLE_NAME\"),information_schemas.COLUMN_NAME.alias(\"COLUMN_NAME\") ,information_schemas.IS_NULLABLE.alias(\"IS_NULLABLE\"))\r\n",
+					"        \r\n",
+					"\r\n",
+					"        query_string = query.select(\"QUERY\").where(query.TABLE_NAME == table).rdd.flatMap(lambda x:x).collect()\r\n",
+					"        queries_list = \",\".join(query_string)\r\n",
+					"        \r\n",
+					"        database = staged_instructions[table][\"SERVERLESS_SQL_POOL_DATABASE\"]\r\n",
+					"        schema = staged_instructions[table][\"SERVERLESS_SQL_POOL_SCHEMA\"]\r\n",
+					"        \r\n",
+					"        file_path = f\"{staged_instructions[table]['SERVERLESS_SQL_POOL_DATABASE']}/{staged_instructions[table]['SERVERLESS_SQL_POOL_SCHEMA']}/{staged_instructions[table]['TABLE_NAME']}\"\r\n",
+					"        external_tables_instructions.update({f'{staged_instructions[table][\"TABLE_NAME\"]}': {\"TABLE_QUERY\" : f'{queries_list}' , \"FILE_PATH\":f'{file_path}' , \"SERVERLESS_SQL_POOL_DATABASE\":staged_instructions[table][\"SERVERLESS_SQL_POOL_DATABASE\"], \"SERVERLESS_SQL_SCHEMA\":staged_instructions[table][\"SERVERLESS_SQL_POOL_SCHEMA\"], \"EXTERNAL_DATA_SOURCE\":f'exds_gen2_{datalake_staged_container}'}})\r\n",
+					"\r\n",
+					"    #display(query)\r\n",
+					"    return external_tables_instructions"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"#not logged\r\n",
+					"def produce_external_table_definition(database_name:str,schema_name: str, table_name: str, file_system: str, data_source: str, location: str, columns_meta: str) -> str:\r\n",
+					"    \"\"\"\r\n",
+					"\r\n",
+					"    The purpose of this function is to create an external table definition string, using various table parameters.\r\n",
+					"\r\n",
+					"    Parameters:\r\n",
+					"     1. schema_name (str): Takes in the constant schema name (PARAM_SCHEMA_NAME)\r\n",
+					"     2. table_name (str): Takes in the variable table names derived from the tables JSON metadata \r\n",
+					"     3. file_system (str): Takes in the constant ADLS file system where the data is situated (PARAM_FILESYSTEM)\r\n",
+					"     4. data_source (str): Takes in the external_data_source_name variable, which is the result of configure_database_lake_access function\r\n",
+					"     5. hierarchy (str): Takes in the file hierarchy in ADLS, derived from the tables JSON metadata\r\n",
+					"     6. columns_meta (str): Takes in the tables columns metadata, derived from the JSON metadata\r\n",
+					"\r\n",
+					"\r\n",
+					"\r\n",
+					"    Output: A string matching exactly a CREATE EXTERNAL TABLE Serverless SQL query. It contains all the D365 tables information required to create the views, including a schema.\r\n",
+					"\r\n",
+					"    \"\"\"\r\n",
+					"\r\n",
+					"    #print('Producing table definition.')\r\n",
+					"    return f\"\"\"\r\n",
+					"        USE [{database_name}];\r\n",
+					"        \r\n",
+					"        IF NOT EXISTS (select s.name as [SCHEMA_NAME],t.name AS [TABLE_NAME] from sys.tables t, sys.schemas s where t.schema_id = s.schema_id and s.name = '{schema_name}' and t.name = '{table_name}')\r\n",
+					"            CREATE EXTERNAL TABLE [{schema_name}].[{table_name}](\r\n",
+					"                {columns_meta}\r\n",
+					"                )  \r\n",
+					"                WITH (\r\n",
+					"                LOCATION = '{location}',\r\n",
+					"                DATA_SOURCE = [{data_source}],  \r\n",
+					"                FILE_FORMAT = [exff_delta]\r\n",
+					"                )\r\n",
+					"    \"\"\"\r\n",
+					" "
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## This function creates the external tables via JDBC driver, SQL injection. The query that it injects is the output of the produceExternalTableDefinition function\r\n",
+					"# primary\r\n",
+					"def create_external_table(odbc_url:str, odbc_token:str, database_name:str, table_definition:str):\r\n",
+					"    \"\"\"\r\n",
+					"    The purpose of this function is to execute the query created before, against the Serverless SQL DB.\r\n",
+					"\r\n",
+					"    Parameters:\r\n",
+					"     1. odbc_url (str): Takes in the url required for the odbc connection\r\n",
+					"     2. odbc_token (str): Takes in the authentication token required for the odbc connection\r\n",
+					"     4. database_name (str): Takes in the constant Serverless SQL DB (DATABASE_NAME_TO_CREATE)\r\n",
+					"     5. table_definition (str): Takes in the result of the produceExternalTableDefinition function.\r\n",
+					"\r\n",
+					"    Output: Connects to the Serverless SQL DB through JDBC and injects the Queries produced using produceExternalTableDefinition function.\r\n",
+					"\r\n",
+					"    \"\"\"\r\n",
+					"\r\n",
+					"    d = pyodbc.connect(odbc_url, attrs_before = { SQL_COPT_SS_ACCESS_TOKEN:odbc_token })\r\n",
+					"    d.autocommit = True\r\n",
+					"    cursor = d.cursor()\r\n",
+					"    Query = table_definition\r\n",
+					"    cursor.execute(Query)\r\n",
+					"    d.close()    "
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

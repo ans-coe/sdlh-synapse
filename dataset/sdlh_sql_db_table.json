@@ -1,0 +1,52 @@
+{
+	"name": "sdlh_sql_db_table",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "sql_sdlh_shir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"SOURCE_SYSTEM_CONNECTION_STRING": {
+					"value": "@dataset().SOURCE_SYSTEM_CONNECTION_STRING",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"DATABASE_NAME": {
+				"type": "string"
+			},
+			"SCHEMA_NAME": {
+				"type": "string"
+			},
+			"TABLE_NAME": {
+				"type": "string"
+			},
+			"SOURCE_SYSTEM_CONNECTION_STRING": {
+				"type": "string"
+			},
+			"COLUMNS_META": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH"
+		},
+		"annotations": [],
+		"type": "SqlServerTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().SCHEMA_NAME",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().TABLE_NAME",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

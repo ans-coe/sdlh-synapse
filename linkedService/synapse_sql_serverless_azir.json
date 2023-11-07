@@ -1,0 +1,32 @@
+{
+	"name": "synapse_sql_serverless_azir",
+	"properties": {
+		"description": "Added as part of ANS base deployment",
+		"parameters": {
+			"CONNECTION_STRING_SECRET_NAME": {
+				"type": "String",
+				"defaultValue": "synapse-sql-serverless-connection-string-001"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDW",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/linkedservices"
+}

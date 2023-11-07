@@ -1,0 +1,21 @@
+{
+	"name": "azure_sql_sdlh_azir",
+	"properties": {
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": "azure-sql-connection-string-001"
+			}
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
