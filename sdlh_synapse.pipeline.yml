@@ -6,7 +6,7 @@ parameters:
   default: 'latest'
 - name: synapse_shir_name 
   type: string
-  default: 'shir-sigma-data-uksouth-001'
+  default: ''
 
 variables:
   current_date: $[ format('{0:yyyy}_{0:MM}_{0:dd}', pipeline.startTime) ]
