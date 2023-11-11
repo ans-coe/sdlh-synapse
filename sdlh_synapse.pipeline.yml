@@ -48,6 +48,9 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
+      echo ""
+      echo "Reading in linked service json files to replace SHIR name value where required"
+      echo ""
       $folder = "linkedService"
       if (Test-Path ".\$folder") {
         Get-ChildItem -Path ".\$folder" | Sort-Object |
@@ -58,10 +61,11 @@ steps:
           $json = Get-Content -Path ".\$folder\$fileName" | ConvertFrom-Json
           $json.update | % {if($json.name -like "*shir") {$json.properties.connectVia.referenceName = "${{ parameters.synapse_shir_name }}" }}
           $json | ConvertTo-Json -Depth 4 | Set-Content -NoNewline -Force ".\$folder\$fileName"
+          echo "Checked file: $fileName"
         }
       }
     pwsh: true
-    workingDirectory: '../sdlh-synapse'
+    workingDirectory: '../sdlh-synapse/synapse_workspace'
   displayName: 'Complete Required Custom Updates'
 
 - task: CmdLine@2
