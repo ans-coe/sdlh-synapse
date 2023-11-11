@@ -873,6 +873,10 @@
 									}
 								},
 								"snapshot": true,
+								"sparkPool": {
+									"referenceName": "synspsm33as34",
+									"type": "BigDataPoolReference"
+								},
 								"executorSize": "Small",
 								"conf": {
 									"spark.dynamicAllocation.enabled": true,
