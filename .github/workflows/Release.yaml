@@ -28,10 +28,11 @@ jobs:
       - name: Archive Files
         run: |
            tar -czf SDLH-${{ steps.version.outputs.version }}.tar.gz synapse_workspace/
+    
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: SDLH-${{ steps.version.outputs.version }}.zip
+          artifacts: SDLH-${{ steps.version.outputs.version }}.tar.gz 
           tag: v${{ steps.version.outputs.version }}
           body: |
             Release v${{ steps.version.outputs.version }}
