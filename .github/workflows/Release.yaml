@@ -27,7 +27,8 @@ jobs:
           
       - name: Archive Files
         run: |
-           tar -czf SDLH-${{ steps.version.outputs.version }}.tar.gz synapse_workspace/
+           cd synapse_workspace
+           tar -czf SDLH-${{ steps.version.outputs.version }}.tar.gz dataset/ notebook/ linkedService/ pipeline/
     
       - name: Create Release
         uses: ncipollo/release-action@v1
