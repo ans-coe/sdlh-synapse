@@ -27,8 +27,8 @@ jobs:
           
       - name: Archive Files
         run: |
-           ls -a
-           zip SDLH-${{ steps.version.outputs.version }}.zip synapse_workspace/
+           cd synapse_workspace
+           zip SDLH-${{ steps.version.outputs.version }}.zip dataset/ notebook/ linkedService/ pipeline/
 
       - name: Create Release
         uses: ncipollo/release-action@v1
