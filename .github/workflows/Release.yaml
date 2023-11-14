@@ -34,7 +34,7 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: synapse_workspace/SDLH-${{ steps.version.outputs.version }}.tar.gz 
+          artifacts: synapse_workspace/SDLH.tar.gz 
           tag: v${{ steps.version.outputs.version }}
           body: |
             Release v${{ steps.version.outputs.version }}
