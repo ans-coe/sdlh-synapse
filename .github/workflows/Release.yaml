@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - BethFleming-patch-1
 
 jobs:
   create_release:
