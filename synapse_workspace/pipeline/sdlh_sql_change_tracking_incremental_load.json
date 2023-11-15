@@ -874,7 +874,7 @@
 								},
 								"snapshot": true,
 								"sparkPool": {
-									"referenceName": "synspsm33as34",
+									"referenceName": "PARAM_SPARK_POOL",
 									"type": "BigDataPoolReference"
 								},
 								"executorSize": "Small",
