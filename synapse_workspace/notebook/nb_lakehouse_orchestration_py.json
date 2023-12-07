@@ -1,0 +1,692 @@
+{
+	"name": "nb_lakehouse_orchestration_py",
+	"properties": {
+		"nbformat": 4,
+		"nbformat_minor": 2,
+		"sessionProperties": {
+			"driverMemory": "28g",
+			"driverCores": 4,
+			"executorMemory": "28g",
+			"executorCores": 4,
+			"numExecutors": 2,
+			"runAsWorkspaceSystemIdentity": true,
+			"conf": {
+				"spark.dynamicAllocation.enabled": "false",
+				"spark.dynamicAllocation.minExecutors": "2",
+				"spark.dynamicAllocation.maxExecutors": "2",
+				"spark.autotune.trackingId": "3d2a66e8-850f-43ed-87ed-ad6d61ed4aca"
+			}
+		},
+		"metadata": {
+			"saveOutput": true,
+			"enableDebugMode": true,
+			"kernelspec": {
+				"name": "synapse_pyspark",
+				"display_name": "python"
+			},
+			"language_info": {
+				"name": "python"
+			},
+			"sessionKeepAliveTimeout": 30
+		},
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## SDLH (Strategic Data Lakehouse) Orchestration\r\n",
+					"<p><b>Description: </b>Enter notebook decription</p>\r\n",
+					"<b>Parent Process: </b>SDLH Pipelines</p>\r\n",
+					"<table align=\"left\">\r\n",
+					" <thead>\r\n",
+					"  <tr>\r\n",
+					"   <th>Contributor</th>\r\n",
+					"   <th>Date</th>\r\n",
+					"   <th>Version</th>\r\n",
+					"   <th>Comment</th>\r\n",
+					"   <th>WorkItem No</th>\r\n",
+					"  </tr>\r\n",
+					" </thead>\r\n",
+					" <tbody>\r\n",
+					"  <tr>\r\n",
+					"   <td>Andrei Dumitru</td>\r\n",
+					"   <td>2022-12-09</td>\r\n",
+					"   <td>1.0</td>\r\n",
+					"   <td>Create initial release</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
+					"  <tr>\r\n",
+					"   <td>Darren Price</td>\r\n",
+					"   <td>2023-10-23</td>\r\n",
+					"   <td>2.0</td>\r\n",
+					"   <td>Updated for SDLH v2</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
+					" </tbody>\r\n",
+					"</table>"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Install Python Packages"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"pip install azure-storage-queue azure-identity"
+				],
+				"execution_count": 5
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Import Python Libraries"
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": [
+					"import re\r\n",
+					"import pandas as pd\r\n",
+					"import numpy as np\r\n",
+					"import uuid\r\n",
+					"from itertools import chain\r\n",
+					"import pyspark\r\n",
+					"import logging\r\n",
+					"import json\r\n",
+					"import copy\r\n",
+					"import pyspark.sql.types as T\r\n",
+					"import pyodbc\r\n",
+					"import struct\r\n",
+					"from notebookutils import mssparkutils \r\n",
+					"\r\n",
+					"from collections.abc import Iterable\r\n",
+					"\r\n",
+					"from azure.identity import DefaultAzureCredential\r\n",
+					"\r\n",
+					"from azure.core.credentials import AzureNamedKeyCredential\r\n",
+					"from azure.core.exceptions import ResourceExistsError, ResourceNotFoundError\r\n",
+					"\r\n",
+					"from pyspark.sql.types import StructType,StructField, StringType, IntegerType\r\n",
+					"from pyspark.sql import SparkSession\r\n",
+					"from pyspark.sql.functions import substring_index, concat_ws, col\r\n",
+					"\r\n",
+					"import fnmatch\r\n",
+					"from delta import *\r\n",
+					"from datetime import datetime\r\n",
+					"import pyspark.sql.functions as F\r\n",
+					"import msal\r\n",
+					"from pyspark.sql.functions import col, lit, regexp_replace, concat, udf, when, expr, from_json, explode, arrays_zip, current_date, year,month, dayofmonth, hour, days, lower\r\n",
+					"from pyspark.sql.types import *\r\n",
+					"from pyspark.context import SparkContext\r\n",
+					"\r\n",
+					"from azure.storage.queue import (\r\n",
+					"        QueueClient,\r\n",
+					"        BinaryBase64EncodePolicy,\r\n",
+					"        BinaryBase64DecodePolicy\r\n",
+					")\r\n",
+					"from azure.identity import DefaultAzureCredential\r\n",
+					"import os, uuid\r\n",
+					"from threading import Thread\r\n",
+					"from queue import Queue\r\n",
+					"\r\n",
+					"import re\r\n",
+					"from pyspark.sql.functions import col, lit, regexp_replace, concat, collect_list\r\n",
+					"from pyspark.sql import SparkSession"
+				],
+				"execution_count": 6
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Set Spark Configuration"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"spark.conf.set(\"spark.sql.parquet.int96RebaseModeInRead\", \"CORRECTED\")\r\n",
+					"spark.conf.set(\"spark.sql.parquet.int96RebaseModeInWrite\", \"CORRECTED\")\r\n",
+					"spark.conf.set(\"spark.sql.parquet.datetimeRebaseModeInRead\", \"CORRECTED\")\r\n",
+					"spark.conf.set(\"spark.sql.parquet.datetimeRebaseModeInWrite\", \"CORRECTED\")"
+				],
+				"execution_count": 7
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Import Utility Notebooks"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run utils/nb_util_sql_staged_etl_and_logging_py"
+				],
+				"execution_count": 8
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"%run utils/nb_util_sql_query_py"
+				],
+				"execution_count": 9
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Toggle Parameters Cell"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"tags": [
+						"parameters"
+					]
+				},
+				"source": [
+					"# Pipeline Parameters\r\n",
+					"PARAM_TRIGGER_NAME = \"\"\r\n",
+					"PARAM_TRIGGER_TIME = \"\"\r\n",
+					"PARAM_TRIGGER_TYPE = \"\"\r\n",
+					"PARAM_PIPELINE_NAME = \"\"\r\n",
+					"PARAM_STORAGE_QUEUE_NAME = \"\"\r\n",
+					"PARAM_PIPELINE_RUN_ID = \"\""
+				],
+				"execution_count": 10
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Keyvault Variables"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"azuresql_server_fqdn = mssparkutils.credentials.getSecretWithLS(\"keyvault_data_azir\", \"azure-sql-server-fqdn\")\r\n",
+					"azuresql_db = mssparkutils.credentials.getSecretWithLS(\"keyvault_data_azir\", \"azure-sql-database-name-001\")\r\n",
+					"\r\n",
+					"datalake_storage_name = mssparkutils.credentials.getSecretWithLS(\"keyvault_data_azir\", \"datalake-account-name\")\r\n",
+					"datalake_access_key = mssparkutils.credentials.getSecretWithLS(\"keyvault_data_azir\", \"datalake-access-key\")\r\n",
+					"datalake_connection_string = f\"DefaultEndpointsProtocol=https;AccountName={datalake_storage_name};AccountKey={datalake_access_key};EndpointSuffix=core.windows.net\"\r\n",
+					"\r\n",
+					"synapse_serverless_server_fqdn = mssparkutils.credentials.getSecretWithLS(\"keyvault_data_azir\", \"synapse-sql-serverless-server-fqdn\")\r\n",
+					"\r\n",
+					"synapse_workspace = mssparkutils.env.getWorkspaceName()\r\n",
+					"env = synapse_workspace.split(\"-\")[3]\r\n",
+					"\r\n",
+					"print (synapse_workspace)\r\n",
+					"print (env)"
+				],
+				"execution_count": 12
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Get Access Tokens"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Get access token for Synapse Managed identity Auth\r\n",
+					"sql_access_token = mssparkutils.credentials.getConnectionStringOrCreds(\"azure_sql_sdlh_azir\")\r\n",
+					"\r\n",
+					"# Reconfigure access token for usage with pyodbc.connect\r\n",
+					"SQL_COPT_SS_ACCESS_TOKEN = 1256\r\n",
+					"\r\n",
+					"exp_token = b\"\"\r\n",
+					"for i in bytes(sql_access_token, \"UTF-8\"):\r\n",
+					"    exp_token += bytes({i})\r\n",
+					"    exp_token += bytes(1)\r\n",
+					"\r\n",
+					"sql_access_token_odbc = struct.pack(\"=i\", len(exp_token)) + exp_token"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Global Variables"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"sql_port = \"1433\"\r\n",
+					"jdbc_options = \"encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net;loginTimeout=30\"\r\n",
+					"odbc_options = \"Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30\"\r\n",
+					"\r\n",
+					"azuresql_server_jdbc_url = f\"jdbc:sqlserver://{azuresql_server_fqdn}:{sql_port};database={azuresql_db};{jdbc_options}\"\r\n",
+					"azuresql_server_odbc_url = f\"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={azuresql_server_fqdn},{sql_port};DATABASE={azuresql_db};{odbc_options}\"\r\n",
+					"\r\n",
+					"synapse_serverless_odbc_url = f\"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={synapse_serverless_server_fqdn},{sql_port};DATABASE=master;{odbc_options}\"\r\n",
+					"\r\n",
+					"datalake_staged_container = \"enriched\""
+				],
+				"execution_count": 14
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Preparing the ODBC connection between Apache Spark and the Metadata DB for logging the ETL process\r\n",
+					"try:\r\n",
+					"    etl_sql_driver = pyodbc.connect(azuresql_server_odbc_url, attrs_before = { SQL_COPT_SS_ACCESS_TOKEN:sql_access_token_odbc })\r\n",
+					"    etl_sql_driver.autocommit = True\r\n",
+					"    cursor_etl_sql = etl_sql_driver.cursor()\r\n",
+					"except Exception as e:\r\n",
+					"    logging.error(\"*** ERROR - Metadata Database connection has failed. ***\")\r\n",
+					"    raise e"
+				],
+				"execution_count": 15
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Prepare ETL Metadata"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"df_objects_metadata_extracted = deserialize_json_meta_to_notebook_etl_relational_meta(azuresql_server_odbc_url, sql_access_token_odbc)[0]\r\n",
+					"df_information_schema = deserialize_json_meta_to_notebook_etl_relational_meta(azuresql_server_odbc_url, sql_access_token_odbc)[1]\r\n",
+					"\r\n",
+					"#display(df_objects_metadata_extracted)"
+				],
+				"execution_count": 16
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Raw To Enriched ETL"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"staged_instructions = get_raw_staged_etl_instructions(datalake_staged_container, datalake_storage_name)"
+				],
+				"execution_count": 17
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Prepare the ETL Queue\r\n",
+					"queue_client = QueueClient.from_connection_string(conn_str = datalake_connection_string, queue_name = PARAM_STORAGE_QUEUE_NAME)\r\n",
+					"messages = queue_client.receive_messages(visibility_timeout = 3600)\r\n",
+					"migrated_to_raw = messages.by_page()\r\n",
+					"etl_queue = []\r\n",
+					"for batch in migrated_to_raw:\r\n",
+					"    for table_msg in batch:\r\n",
+					"        table = table_msg.content\r\n",
+					"        etl_queue.append(table)"
+				],
+				"execution_count": 18
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"for table in etl_queue:\r\n",
+					"    raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME,PARAM_TRIGGER_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_RUN_ID ,staged_instructions)"
+				],
+				"execution_count": 19
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Creating Serverless SQL Pool And External Tables"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					},
+					"collapsed": false
+				},
+				"source": [
+					"information_schemas = map_data_types(df_information_schema)"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"tables_list = etl_queue\r\n",
+					"external_tables_instructions = ext_table_mapping(\"SQL\")\r\n",
+					"\r\n",
+					"#print(external_tables_instructions)"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Creation of Serverless SQL DB pre-requisites if they don't exist"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"create_serverless_databases_and_schemas(synapse_serverless_odbc_url, sql_access_token_odbc, datalake_storage_name, datalake_staged_container)"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Creation of external tables if they don't exist"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Here, we are looping through the table names in the tables_query_dictionary, and running the createView function for each one of them\r\n",
+					"## through JDBC, against the Serverless SQL DB.\r\n",
+					"list_errors = []\r\n",
+					"for k in list(external_tables_instructions.keys()):\r\n",
+					"    input_table_name = k\r\n",
+					"    input_columns_meta = external_tables_instructions.get(k)[\"TABLE_QUERY\"]\r\n",
+					"    input_file_path = external_tables_instructions.get(k)[\"FILE_PATH\"]\r\n",
+					"    input_schema_name = external_tables_instructions.get(k)[\"SERVERLESS_SQL_SCHEMA\"]\r\n",
+					"    input_database_name = external_tables_instructions.get(k)[\"SERVERLESS_SQL_POOL_DATABASE\"]\r\n",
+					"    input_external_data_source_name = external_tables_instructions.get(k)[\"EXTERNAL_DATA_SOURCE\"]\r\n",
+					"\r\n",
+					"    try:\r\n",
+					"        ext_table_definition = produce_external_table_definition(database_name = input_database_name,schema_name=input_schema_name, table_name=input_table_name, file_system=datalake_staged_container, data_source=input_external_data_source_name, location=input_file_path, columns_meta=input_columns_meta)\r\n",
+					"        create_external_table(synapse_serverless_odbc_url, sql_access_token_odbc, str(input_database_name), ext_table_definition)\r\n",
+					"    except Exception as err_message:\r\n",
+					"        print(err_message)\r\n",
+					"        list_errors.append({\"table_name\": input_table_name, \"error\":err_message})\r\n",
+					"        raise err_message\r\n",
+					""
+				],
+				"execution_count": null
+			}
+		]
+	}
+}

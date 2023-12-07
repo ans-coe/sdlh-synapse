@@ -1,0 +1,19 @@
+{
+	"name": "serverless_metadata",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "synapse_sql_serverless_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+			}
+		},
+		"folder": {
+			"name": "Generic"
+		},
+		"annotations": [],
+		"type": "AzureSqlDWTable",
+		"schema": []
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}

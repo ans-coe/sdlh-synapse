@@ -1,0 +1,1168 @@
+{
+	"name": "sdlh_sql_change_tracking_incremental_load",
+	"properties": {
+		"activities": [
+			{
+				"name": "for_each_table_etl",
+				"description": "This for loop iterates through the each TABLE_NAME from ETL.SourceTable. Using the table name, it is able to grab the relevant metadata, and construct the query to retrieve the source data.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "batch_changed_tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "create_storage_queue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('batch_changed_tables').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "copy_sql_to_parquet_incremental_load",
+							"description": "Copy activity that takes SQL server tables and writes them as Parquet in a hierarchical namespace within ADLS. It uses table metadata, along with 'lookup_old_watermark_activity' and 'lookup_new_watermark_activity' results to filter only for new and modified records in the source tables.",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "create_log_entry_change_tracking_incremental_load",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT @{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].COLUMNS_META}, CT.@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].PRIMARY_KEYS} AS PK_VALUE, SYS_CHANGE_OPERATION from [@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}].[@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}] S RIGHT OUTER JOIN CHANGETABLE(CHANGES [@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}].[@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}], @{activity('lookup_old_sys_change_version').output.value[0].SYS_CHANGE_VERSION_VALUE}) AS CT ON S.@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].PRIMARY_KEYS} = CT.@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].PRIMARY_KEYS} where CT.SYS_CHANGE_VERSION <= @{item().NEW_SYS_CHANGE_VERSION}",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "sdlh_sql_db_table",
+									"type": "DatasetReference",
+									"parameters": {
+										"SOURCE_SYSTEM": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM",
+											"type": "Expression"
+										},
+										"DATABASE_NAME": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME",
+											"type": "Expression"
+										},
+										"SCHEMA_NAME": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TABLE_NAME": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+											"type": "Expression"
+										},
+										"SOURCE_SYSTEM_CONNECTION_STRING": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"COLUMNS_META": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].COLUMNS_META",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "sdlh_gen2_parquet_snappy",
+									"type": "DatasetReference",
+									"parameters": {
+										"FP0": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+											"type": "Expression"
+										},
+										"FP1": {
+											"value": "@concat(json(activity('retrieve_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('retrieve_object_metadata').output.firstRow.HNS)",
+											"type": "Expression"
+										},
+										"OBJECT_NAME": {
+											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "update_etl_log_on_success_incremental_load",
+							"description": "Stored procedure to complete the logging for the copy activity 'copy_sql_to_parquet_incremental_load', on success.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "copy_sql_to_parquet_incremental_load",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": {
+											"value": "@activity('copy_sql_to_parquet_incremental_load').output.copyDuration",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": null,
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_change_tracking_incremental_load').output.value[0].EtlLogId",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": {
+											"value": "@activity('copy_sql_to_parquet_incremental_load').output.rowsCopied",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_sdlh_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_incremental_load",
+							"description": "Stored procedure to complete the logging for the copy activity 'copy_sql_to_parquet_incremental_load', on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "copy_sql_to_parquet_incremental_load",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@{activity('copy_sql_to_parquet_incremental_load').output.errors[0].Message}",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_change_tracking_incremental_load').output.value[0].EtlLogId",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_sdlh_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "post_table_to_storage_queue",
+							"description": "POST the table name into the Azure Storage Queue. In there, it is also assigned a timestamp.",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_success_incremental_load",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": {
+									"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'), '/messages?visibilitytimeout=30&timeout=30')",
+									"type": "Expression"
+								},
+								"connectVia": {
+									"referenceName": "AutoResolveIntegrationRuntime",
+									"type": "IntegrationRuntimeReference"
+								},
+								"method": "POST",
+								"headers": {
+									"x-ms-version": "2021-04-10",
+									"x-ms-date": {
+										"value": "@formatDateTime(utcnow(),'r')",
+										"type": "Expression"
+									}
+								},
+								"body": {
+									"value": "@concat('<QueueMessage><MessageText>', json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME, '</MessageText></QueueMessage>')",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://storage.azure.com/"
+								}
+							}
+						},
+						{
+							"name": "lookup_old_sys_change_version",
+							"description": "Looks up the ETL.ETL_WATERMARK table in the Metadata DB. Retrieves the old watermark of the table, which is part of the select statement ran against the source system to perform the Source to RAW ETL.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "retrieve_object_metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT TABLE_NAME, \nCASE WHEN SYS_CHANGE_VERSION_VALUE IS NULL THEN 0\nELSE SYS_CHANGE_VERSION_VALUE END AS SYS_CHANGE_VERSION_VALUE\nFROM ETL.SourceIncrementalLoad WHERE SOURCE_SYSTEM = '@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM}' AND DATABASE_NAME = '@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}' AND SCHEMA_NAME = '@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}' AND  TABLE_NAME = '@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azsql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "create_log_entry_change_tracking_incremental_load",
+							"description": "This lookup runs a stored procedure in the metadata DB, where the logging is started for the current table that is being copied.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "lookup_old_sys_change_version",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "Copy_SQL_To_Parquet_CT_Incremental_Load"
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": null
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": null
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "CHANGE_TRACKING_INCREMENTAL"
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+												"type": "Expression"
+											}
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "ADLS_RAW"
+										},
+										"TRIGGER_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerName",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										},
+										"INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": {
+												"value": "@item().NEW_SYS_CHANGE_VERSION",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azsql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "retrieve_object_metadata",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineTriggerMetadataRetrieval]",
+									"storedProcedureParameters": {
+										"OBJECT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().OBJECT_NAME",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_TRIGGER_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerName",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_CURRENT_DATETIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@variables('VAR_TRIGGER_TIME')",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azsql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "retrieve_ingestion_batch_object_names",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "set_trigger_time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineTriggerMetadata]",
+						"storedProcedureParameters": {
+							"PIPELINE_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								}
+							},
+							"PIPELINE_TRIGGER_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().TriggerName",
+									"type": "Expression"
+								}
+							},
+							"_PIPELINE_CURRENT_DATETIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@variables('VAR_TRIGGER_TIME')",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azsql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "create_storage_queue",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "set_storage_queue_name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"method": "PUT",
+					"headers": {
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-version": "2021-04-10"
+					},
+					"body": "NA",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "delete_storage_queue",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "update_ct_id_send_to_queue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"method": "DELETE",
+					"headers": {
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-version": "2021-04-10"
+					},
+					"body": "NA",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "lookup_max_sys_change_version",
+				"description": "Looks up the ETL.SourceIncrementalLoad table in the Metadata DB. Retrieves the old watermark of the table, which is part of the select statement ran against the source system to perform the Source to RAW ETL.",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "retrieve_ingestion_batch_object_names",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT MAX(SYS_CHANGE_VERSION_VALUE) as MAX_SYS_CHANGE_VERSION_VALUE FROM ETL.SourceIncrementalLoad where SOURCE_SYSTEM = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].SOURCE_SYSTEM}' and DATABASE_NAME = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].DATABASE_NAME}' and SCHEMA_NAME = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].SCHEMA_NAME}'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azsql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "lookup_changed_tables",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "lookup_max_sys_change_version",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "DECLARE @SOURCE_SYSTEM varchar(500) = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].SOURCE_SYSTEM}'\nDECLARE @DATABASE_NAME varchar(500) = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].DATABASE_NAME}'\nDECLARE @SOURCE_SYSTEM_CONNECTION_STRING varchar(500)= '@{activity('retrieve_ingestion_batch_object_names').output.value[0].SOURCE_SYSTEM_CONNECTION_STRING}'\nDECLARE @TRIGGER_NAME varchar(500) = '@{activity('retrieve_ingestion_batch_object_names').output.value[0].TRIGGER_NAME}'\n\n\nDeclare @CurTrackingVersion int = CHANGE_TRACKING_CURRENT_VERSION()\n\n\nDeclare @prevTrackingVersion int = @{activity('lookup_max_sys_change_version').output.firstRow.MAX_SYS_CHANGE_VERSION_VALUE}\n\n-- Step 3\n\n-- Get a list of table with change tracking enabled\ndeclare @trackedTables as table (TABLE_NAME nvarchar(1000), SCHEMA_NAME nvarchar(1000));\ninsert into @trackedTables (TABLE_NAME, SCHEMA_NAME)\nselect sys.tables.name as TABLE_NAME, SCHEMA_NAME(sys.tables.schema_id) AS SCHEMA_NAME from sys.change_tracking_tables \njoin sys.tables ON tables.object_id = change_tracking_tables.object_id\n\n\n-- Step 4\n\n-- Table to store list of tables with changes, Min/Max tracking numbers and row counts\ndeclare @changedTables as table (TABLE_NAME nvarchar(1000), SCHEMA_NAME nvarchar(1000),MinVersionTable bigint,MaxVersionTable bigint,RecCnt bigint);\n\n-- For each table name in tracked tables\ndeclare @tableName nvarchar(1000)\ndeclare @schemaName nvarchar(1000)\nwhile exists(select top 1 * from @trackedTables)\nbegin\n  -- Set the current table name\n  set @tableName = (select top 1 TABLE_NAME from @trackedTables order by TABLE_NAME asc);\n  set @schemaName = (select top 1 SCHEMA_NAME from @trackedTables where TABLE_NAME = @tableName);\n  \n\n\n  -- Determine if the table has changed since the previous version\n  declare @sql nvarchar(250)\n  declare @retVal bigint \n  declare @MinChg bigint\n  declare @MaxChg bigint\n\n  set @sql = 'select @retVal = count(*), @MinChg = min(Sys_Change_Version),@MaxChg= max(Sys_Change_Version) from changetable(changes ' +\n\t\t\t\t\t@tableName + ', ' + cast(@prevTrackingVersion as varchar) + ') as changedTable where Sys_Change_Version<='+ cast(@CurTrackingVersion as varchar)\n \n exec sp_executesql @sql, N'@retVal bigint output, @MinChg bigint output, @MaxChg bigint output', @retVal output,@MinChg output,@MaxChg output \n  if @retval > 0\n  begin\n    insert into @changedTables (TABLE_NAME,SCHEMA_NAME,MinVersionTable,MaxVersionTable,RecCnt) select @tableName, @schemaName,@MinChg, @MaxChg, @retVal\n  end\n\n  -- Delete the current table name \n  delete from @trackedTables where TABLE_NAME = @tableName;  \nend\n\n\n-- Step 5 - In reality, this may more sense being part of the above loop, but works for demonstation purposes.\n\n--show output of change tracking - Shows all tables with records with Tracking Version numbers between intial parameters and a row count\nselect \n      CONCAT(REPLACE(REPLACE(REPLACE(@SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',@DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS OBJECT_NAME,\n      @SOURCE_SYSTEM AS SOURCE_SYSTEM,\n      @DATABASE_NAME AS DATABASE_NAME,\n      SCHEMA_NAME AS SCHEMA_NAME,\n      @SOURCE_SYSTEM_CONNECTION_STRING AS SOURCE_SYSTEM_CONNECTION_STRING,\n      @TRIGGER_NAME AS TRIGGER_NAME,\n      TABLE_NAME,\n      MinVersionTable as NEW_SYS_CHANGE_VERSION\n      \n from @changedTables;\n\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_sql_db_table",
+						"type": "DatasetReference",
+						"parameters": {
+							"SOURCE_SYSTEM": "NA",
+							"DATABASE_NAME": "NA",
+							"SCHEMA_NAME": "NA",
+							"TABLE_NAME": "NA",
+							"SOURCE_SYSTEM_CONNECTION_STRING": {
+								"value": "@activity('retrieve_ingestion_batch_object_names').output.value[0].SOURCE_SYSTEM_CONNECTION_STRING",
+								"type": "Expression"
+							},
+							"COLUMNS_META": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_no_changes",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "for_each_table_etl",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('lookup_changed_tables').output.count, 0)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "raw_to_staged_etl_and_external_tables",
+							"description": "This notebook performs the ETL process between Parquet Raw and Delta files in Staged based on the Storage Queue messages, with the help of metadata stored in the Metadata DB. Furthermore, using information schema from the source system, it maps the datatypes to the closest datatype that exists in Serverless SQL Pool, and creates External Tables with a very similar schema to the source tables.",
+							"type": "SynapseNotebook",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"notebook": {
+									"referenceName": "nb_lakehouse_orchestration_py",
+									"type": "NotebookReference"
+								},
+								"parameters": {
+									"PARAM_TRIGGER_NAME": {
+										"value": {
+											"value": "@pipeline().TriggerName",
+											"type": "Expression"
+										},
+										"type": "string"
+									},
+									"PARAM_TRIGGER_TIME": {
+										"value": {
+											"value": "@variables('VAR_TRIGGER_TIME')",
+											"type": "Expression"
+										},
+										"type": "string"
+									},
+									"PARAM_TRIGGER_TYPE": {
+										"value": {
+											"value": "@pipeline().TriggerType",
+											"type": "Expression"
+										},
+										"type": "string"
+									},
+									"PARAM_STORAGE_QUEUE_NAME": {
+										"value": {
+											"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
+											"type": "Expression"
+										},
+										"type": "string"
+									},
+									"PARAM_PIPELINE_NAME": {
+										"value": {
+											"value": "@pipeline().Pipeline",
+											"type": "Expression"
+										},
+										"type": "string"
+									},
+									"PARAM_PIPELINE_RUN_ID": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "string"
+									}
+								},
+								"snapshot": true,
+								"sparkPool": {
+									"referenceName": "PARAM_SPARK_POOL",
+									"type": "BigDataPoolReference"
+								},
+								"executorSize": "Small",
+								"conf": {
+									"spark.dynamicAllocation.enabled": true,
+									"spark.dynamicAllocation.minExecutors": 2,
+									"spark.dynamicAllocation.maxExecutors": 2
+								},
+								"driverSize": "Small",
+								"numExecutors": 2
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "batch_changed_tables",
+				"type": "Filter",
+				"dependsOn": [
+					{
+						"activity": "lookup_changed_tables",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_changed_tables').output.value",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@contains(join(activity('retrieve_ingestion_batch_object_names').output.value, ','), concat('\"TABLE_NAME\":\"',item().TABLE_NAME,'\",'))",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "update_ct_id_send_to_queue",
+				"description": "This for loop iterates through the each TABLE_NAME from ETL.SourceTable. Using the table name, it is able to grab the relevant metadata, and construct the query to retrieve the source data.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "if_no_changes",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('batch_changed_tables').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "lookup_new_sys_change_version_to_write",
+							"description": "Running a query against the table in the source system, to get the newest watermark in the table.",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT CAST(INCREMENTAL_KEY_VALUE AS BIGINT) AS NEW_SYS_CHANGE_VERSION FROM ETL.Log WHERE PIPELINE_RUN_ID = '@{pipeline().RunId}' AND OPERATION = 'CHANGE_TRACKING_INCREMENTAL' AND SCHEMA_NAME = '@{item().SCHEMA_NAME}' AND TABLE_NAME = '@{item().TABLE_NAME}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azsql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "stored_procedure_write_sys_change_version",
+							"description": "Stored procedure to update the watermark of each table, based on the 'Lookup_New_Sys_Change_Version' activity result.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "lookup_new_sys_change_version_to_write",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_WriteSysChangeVersion]",
+								"storedProcedureParameters": {
+									"DATABASE_NAME": {
+										"value": "NA",
+										"type": "String"
+									},
+									"OBJECT_NAME": {
+										"value": {
+											"value": "@item().OBJECT_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SCHEMA_NAME": {
+										"value": "NA",
+										"type": "String"
+									},
+									"SOURCE_SYSTEM": {
+										"value": "NA",
+										"type": "String"
+									},
+									"SYS_CHANGE_VERSION_VALUE": {
+										"value": {
+											"value": "@activity('lookup_new_sys_change_version_to_write').output.firstRow.NEW_SYS_CHANGE_VERSION",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TABLE_NAME": {
+										"value": "NA",
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_sdlh_azir",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "run_pipeline_concurrency_check",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "gen_pipeline_concurrency_check",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PIPELINE_NAME": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"TRIGGER_NAME": {
+							"value": "@pipeline().TriggerName",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "set_storage_queue_name",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_TRIGGER_TIME",
+					"value": {
+						"value": "@concat('etl-queue-',pipeline().RunId)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "set_trigger_time",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_TRIGGER_TIME",
+					"value": {
+						"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"concurrency": 50,
+		"parameters": {
+			"PARAM_LOAD_TYPE": {
+				"type": "string",
+				"defaultValue": "CHANGE_TRACKING"
+			}
+		},
+		"variables": {
+			"VAR_TRIGGER_TIME": {
+				"type": "String"
+			},
+			"VAR_STORAGE_QUEUE_NAME": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "SDLH/SQL"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T16:57:45Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

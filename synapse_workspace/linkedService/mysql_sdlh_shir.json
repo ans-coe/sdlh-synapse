@@ -1,0 +1,31 @@
+{
+	"name": "mysql_sdlh_shir",
+	"properties": {
+		"description": "SDLH MySQL linked service. Its purpose is to connect to a multitude of MySQL databases dynamically.",
+		"parameters": {
+			"SOURCE_SYSTEM_CONNECTION_STRING": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "MySql",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().SOURCE_SYSTEM_CONNECTION_STRING",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "PARAM_SHIR_NAME",
+			"type": "IntegrationRuntimeReference"
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/linkedservices"
+}

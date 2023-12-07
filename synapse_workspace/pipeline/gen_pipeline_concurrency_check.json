@@ -1,0 +1,240 @@
+{
+	"name": "gen_pipeline_concurrency_check",
+	"properties": {
+		"activities": [
+			{
+				"name": "check_for_concurrent_runs",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "set_variable_synapse_workspace_name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://', variables('VAR_SYNAPSE_WORKSPACE_NAME'), '.dev.azuresynapse.net/queryPipelineRuns?api-version=2020-12-01')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"method": "POST",
+					"body": {
+						"value": "{ \"lastUpdatedAfter\": \"2023-07-05T00:36:44.3345758Z\", \"lastUpdatedBefore\": \"@{utcnow()}\", \"filters\": [ { \"operand\": \"PipelineName\", \"operator\": \"Equals\", \"values\": [ \"@{pipeline().parameters.PIPELINE_NAME}\" ] }, { \"operand\": \"Status\", \"operator\": \"In\", \"values\": [ \"InProgress\", \"Queued\" ] }, {\"operand\": \"TriggeredByName\", \"operator\":\"Equals\", \"values\":[\"@{pipeline().parameters.TRIGGER_NAME}\"]} ] }",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://dev.azuresynapse.net/"
+					}
+				}
+			},
+			{
+				"name": "if_no_concurrent_pipeline_runs",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "check_for_concurrent_runs",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@lessOrEquals(length(activity('check_for_concurrent_runs').output.value), 1)",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "fail_pipeline",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "insert_failure_log",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
+									"type": "Expression"
+								},
+								"errorCode": "429"
+							}
+						},
+						{
+							"name": "insert_failure_log",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_InsertLog]",
+								"storedProcedureParameters": {
+									"COMPONENT_NAME": {
+										"value": "run_pipeline_concurrency_check",
+										"type": "String"
+									},
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": null,
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"INCREMENTAL_KEY_VALUE": {
+										"value": null,
+										"type": "String"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"OPERATION": {
+										"value": "",
+										"type": "String"
+									},
+									"PIPELINE_NAME": {
+										"value": {
+											"value": "@pipeline().parameters.PIPELINE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PIPELINE_RUN_ID": {
+										"value": {
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SCHEMA_NAME": {
+										"value": null,
+										"type": "String"
+									},
+									"SOURCE_SYSTEM": {
+										"value": null,
+										"type": "String"
+									},
+									"START_TIME": {
+										"value": null,
+										"type": "DateTime"
+									},
+									"TABLE_NAME": {
+										"value": null,
+										"type": "String"
+									},
+									"TARGET_SYSTEM": {
+										"value": null,
+										"type": "String"
+									},
+									"TRIGGER_NAME": {
+										"value": {
+											"value": "@pipeline().parameters.TRIGGER_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TRIGGER_TIME": {
+										"value": {
+											"value": "@pipeline().TriggerTime",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"TRIGGER_TYPE": {
+										"value": {
+											"value": "@pipeline().TriggerType",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_sdlh_azir",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "set_variable_synapse_workspace_name",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_SYNAPSE_WORKSPACE_NAME",
+					"value": {
+						"value": "@pipeline().DataFactory",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"PIPELINE_NAME": {
+				"type": "string"
+			},
+			"TRIGGER_NAME": {
+				"type": "string",
+				"defaultValue": "Manual"
+			}
+		},
+		"variables": {
+			"VAR_SYNAPSE_WORKSPACE_NAME": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Generic"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-07-24T15:41:56Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

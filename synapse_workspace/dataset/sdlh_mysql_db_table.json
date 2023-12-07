@@ -1,0 +1,45 @@
+{
+	"name": "sdlh_mysql_db_table",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "mysql_sdlh_shir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"SOURCE_SYSTEM_CONNECTION_STRING": {
+					"value": "@dataset().SOURCE_SYSTEM_CONNECTION_STRING",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"DATABASE_NAME": {
+				"type": "string"
+			},
+			"TABLE_NAME": {
+				"type": "string"
+			},
+			"SOURCE_SYSTEM_CONNECTION_STRING": {
+				"type": "string"
+			},
+			"COLUMNS_META": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH"
+		},
+		"annotations": [],
+		"type": "MySqlTable",
+		"schema": [],
+		"typeProperties": {
+			"tableName": {
+				"value": "@dataset().TABLE_NAME",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.Synapse/workspaces/datasets"
+}
