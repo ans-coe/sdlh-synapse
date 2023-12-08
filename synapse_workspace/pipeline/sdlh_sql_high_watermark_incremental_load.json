@@ -843,7 +843,7 @@
 								},
 								"snapshot": true,
 								"sparkPool": {
-									"referenceName": "PARAM_SPARK_POOL",
+									"referenceName": "PARAM_SPARK_POOL_NAME",
 									"type": "BigDataPoolReference"
 								},
 								"executorSize": "Small",

@@ -1,3 +1,10 @@
+#################################################################
+# ANS CoE SDLH (Strategic Data Lakehouse) Synapse Deployment
+#
+# This template contains a pipeline definition to extract
+# and create feature branch for SDLH Synapse Workspace
+# https://github.com/ans-coe/sdlh-synapse
+#################################################################
 parameters:
 - name: pat_token
   type: string
@@ -6,7 +13,10 @@ parameters:
   default: 'latest'
 - name: synapse_shir_name 
   type: string
-  default: ''
+  default: 'shir-dcoe-data-uksouth-002'
+- name: spark_pool_name 
+  type: string
+  default: 'synspsm33as34'
 
 variables:
   current_date: $[ format('{0:yyyy}_{0:MM}_{0:dd}', pipeline.startTime) ]
@@ -23,61 +33,55 @@ steps:
 - checkout: git://$(System.TeamProject)/$(Build.Repository.Name)@main
 
 - task: CmdLine@2
+  displayName: 'Setup Git'
   inputs:
     script: |
       git config --local user.email "noreply@ansgroup.co.uk"
       git config --local user.name $(Build.RequestedFor)
-  displayName: 'Setup Git'
 
 - task: CmdLine@2
+  displayName: 'Get Upstream'
   inputs:
     script: |
       if [[ ${{ parameters.release_version }} == "latest" ]]; then
-        git clone -b main --single-branch https://github.com/ans-coe/sdlh-synapse
-        cd sdlh-synapse
-        git branch -a
+        BUNDLE_URL=$(curl -s https://api.github.com/repos/ans-coe/sdlh-synapse/releases/latest | jq -r '.assets[] | select(.name == "SDLH.tar.gz") | .browser_download_url')
+        wget -q "$BUNDLE_URL" -O "SDLH.tar.gz"
       else
-        git clone -b ${{ parameters.release_version }} --single-branch https://github.com/ans-coe/sdlh-synapse
-        cd sdlh-synapse
-        git branch -a
+        BUNDLE_URL=$(curl -s https://api.github.com/repos/ans-coe/sdlh-synapse/releases/tags/v${{ parameters.release_version }} | jq -r '.assets[] | select(.name == "SDLH.tar.gz") | .browser_download_url')
+        wget -q "$BUNDLE_URL" -O "SDLH.tar.gz"
       fi
-    workingDirectory: '../'
-  displayName: 'Get Upstream'
-
-- task: PowerShell@2
-  inputs:
-    targetType: 'inline'
-    script: |
-      echo ""
-      echo "Reading in linked service json files to replace SHIR name value where required"
-      echo ""
-      $folder = "linkedService"
-      if (Test-Path ".\$folder") {
-        Get-ChildItem -Path ".\$folder" | Sort-Object |
-        Foreach-Object {
-          $fileName = $_.Name
-      
-          # Read in files and replace matching object value
-          $json = Get-Content -Path ".\$folder\$fileName" | ConvertFrom-Json
-          $json.update | % {if($json.name -like "*shir") {$json.properties.connectVia.referenceName = "${{ parameters.synapse_shir_name }}" }}
-          $json | ConvertTo-Json -Depth 4 | Set-Content -NoNewline -Force ".\$folder\$fileName"
-          echo "Checked file: $fileName"
-        }
-      }
-    pwsh: true
-    workingDirectory: '../sdlh-synapse/synapse_workspace'
-  displayName: 'Complete Required Custom Updates'
 
 - task: CmdLine@2
+  displayName: 'Extract Upstream Zip'
   inputs:
     script: |
-      cp -r ./synapse_workspace/* $(System.DefaultWorkingDirectory)
-      cd $(System.DefaultWorkingDirectory)
-    workingDirectory: '../sdlh-synapse'
-    failOnStderr: true
-  displayName: 'Copy Generated Config'
+      tar -xzf "SDLH.tar.gz"
+      rm "SDLH.tar.gz"
+  
+- task: PythonScript@0
+  displayName: 'Replace Required Files'
+  inputs:
+    scriptSource: 'inline'
+    script: |
+      import os
+      def multifile_find_and_replace(folder:str, oldString:str, newString:str):
+          for root, dirs, files in os.walk(folder):
+              for file in files:
+                  if file != '.DS_Store':
+                      file_path = os.path.join(root, file)
+                      with open(file_path, 'r') as f:
+                          content = f.read()
+                          newContent = content.replace(oldString, newString)
+                      if newContent != content:
+                          with open(file_path, 'w') as f:
+                              f.write(newContent)
+                          print(f'Replaced value in: {file_path}')
+
+      multifile_find_and_replace('linkedService', 'PARAM_SHIR_NAME', '${{ parameters.synapse_shir_name }}')
+      multifile_find_and_replace('pipeline', 'PARAM_SPARK_POOL_NAME', '${{ parameters.spark_pool_name }}')
 
 - task: CmdLine@2
+  displayName: 'Check For Updates'
   inputs:
     script: |
       if [[ -n $(git status --porcelain) ]]; then
@@ -89,9 +93,9 @@ steps:
         echo "There are no modified or untracked files."
         echo "##vso[task.setvariable variable=updates]false"
       fi
-  displayName: 'Check for Updates'
 
 - task: CmdLine@2
+  displayName: 'Push Changes'
   inputs:
     script: |
       if [ "$(updates)" == "true" ]; then
@@ -101,4 +105,3 @@ steps:
       else
         echo "No updates to push."
       fi
-  displayName: 'Push Changes'
