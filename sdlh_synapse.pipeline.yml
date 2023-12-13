@@ -13,7 +13,7 @@ parameters:
   default: 'latest'
 - name: synapse_shir_name 
   type: string
-  default: 'shir-dcoe-data-uksouth-002'
+  default: ''
 - name: spark_pool_name 
   type: string
   default: 'synspsm33as34'
