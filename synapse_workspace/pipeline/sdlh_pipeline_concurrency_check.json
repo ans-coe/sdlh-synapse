@@ -1,6 +1,7 @@
 {
-	"name": "gen_pipeline_concurrency_check",
+	"name": "sdlh_pipeline_concurrency_check",
 	"properties": {
+		"description": "Pipeline to check if a given pipeline is already running.  If the given pipeline is already running the duplicate run is failed to avoid issues with duplication and corrupting of required data",
 		"activities": [
 			{
 				"name": "check_for_concurrent_runs",
@@ -32,7 +33,7 @@
 					},
 					"method": "POST",
 					"body": {
-						"value": "{ \"lastUpdatedAfter\": \"2023-07-05T00:36:44.3345758Z\", \"lastUpdatedBefore\": \"@{utcnow()}\", \"filters\": [ { \"operand\": \"PipelineName\", \"operator\": \"Equals\", \"values\": [ \"@{pipeline().parameters.PIPELINE_NAME}\" ] }, { \"operand\": \"Status\", \"operator\": \"In\", \"values\": [ \"InProgress\", \"Queued\" ] }, {\"operand\": \"TriggeredByName\", \"operator\":\"Equals\", \"values\":[\"@{pipeline().parameters.TRIGGER_NAME}\"]} ] }",
+						"value": "{\n    \"lastUpdatedAfter\": \"@{getPastTime(1, 'Day')}\",\n    \"lastUpdatedBefore\": \"@{utcnow()}\",\n    \"filters\": [\n      {\n        \"operand\": \"PipelineName\",\n        \"operator\": \"Equals\",\n        \"values\": [\n          \"@{pipeline().parameters.PARAM_PIPELINE_NAME}\"\n        ]\n      },\n      {\n        \"operand\": \"Status\",\n        \"operator\": \"In\",\n        \"values\": [\n          \"InProgress\",\n          \"Queued\"\n        ]\n      }\n    ]\n  }",
 						"type": "Expression"
 					},
 					"authentication": {
@@ -73,7 +74,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"message": {
-									"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
+									"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PARAM_PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.PARAM_TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
 									"type": "Expression"
 								},
 								"errorCode": "429"
@@ -98,6 +99,10 @@
 										"value": "run_pipeline_concurrency_check",
 										"type": "String"
 									},
+									"DATABASE_NAME": {
+										"value": null,
+										"type": "String"
+									},
 									"DELETES": {
 										"value": null,
 										"type": "Int32"
@@ -112,7 +117,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
+											"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PARAM_PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.PARAM_TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -126,12 +131,12 @@
 										"type": "Int32"
 									},
 									"OPERATION": {
-										"value": "",
+										"value": "Web Activity - Pipeline Concurrency",
 										"type": "String"
 									},
 									"PIPELINE_NAME": {
 										"value": {
-											"value": "@pipeline().parameters.PIPELINE_NAME",
+											"value": "@pipeline().Pipeline",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -152,7 +157,10 @@
 										"type": "String"
 									},
 									"START_TIME": {
-										"value": null,
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
 										"type": "DateTime"
 									},
 									"TABLE_NAME": {
@@ -165,7 +173,7 @@
 									},
 									"TRIGGER_NAME": {
 										"value": {
-											"value": "@pipeline().parameters.TRIGGER_NAME",
+											"value": "@pipeline().parameters.PARAM_TRIGGER_NAME",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -184,6 +192,20 @@
 										},
 										"type": "String"
 									},
+									"TRIGGERING_PIPELINE_NAME": {
+										"value": {
+											"value": "@pipeline()?.TriggeredByPipelineName",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TRIGGERING_PIPELINE_RUN_ID": {
+										"value": {
+											"value": "@pipeline()?.TriggeredByPipelineRunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
 									"UPDATES": {
 										"value": null,
 										"type": "Int32"
@@ -191,7 +213,7 @@
 								}
 							},
 							"linkedServiceName": {
-								"referenceName": "azure_sql_sdlh_azir",
+								"referenceName": "azure_sql_data_no_param_azir",
 								"type": "LinkedServiceReference"
 							}
 						}
@@ -217,10 +239,13 @@
 			}
 		],
 		"parameters": {
-			"PIPELINE_NAME": {
+			"PARAM_PIPELINE_NAME": {
 				"type": "string"
 			},
-			"TRIGGER_NAME": {
+			"PARAM_PIPELINE_RUN_ID": {
+				"type": "string"
+			},
+			"PARAM_TRIGGER_NAME": {
 				"type": "string",
 				"defaultValue": "Manual"
 			}
@@ -231,7 +256,7 @@
 			}
 		},
 		"folder": {
-			"name": "Generic"
+			"name": "SDLH/Common"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-07-24T15:41:56Z"

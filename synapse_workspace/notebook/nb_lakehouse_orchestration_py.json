@@ -14,7 +14,7 @@
 				"spark.dynamicAllocation.enabled": "false",
 				"spark.dynamicAllocation.minExecutors": "2",
 				"spark.dynamicAllocation.maxExecutors": "2",
-				"spark.autotune.trackingId": "3d2a66e8-850f-43ed-87ed-ad6d61ed4aca"
+				"spark.autotune.trackingId": "5407bb1e-a15e-4e50-b9a1-e94f301a20c0"
 			}
 		},
 		"metadata": {
@@ -65,7 +65,14 @@
 					"   <td>Darren Price</td>\r\n",
 					"   <td>2023-10-23</td>\r\n",
 					"   <td>2.0</td>\r\n",
-					"   <td>Updated for SDLH v2</td>\r\n",
+					"   <td>Updated for SDLH v2.0</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
+					"  <tr>\r\n",
+					"   <td>Darren Price</td>\r\n",
+					"   <td>2024-01-09</td>\r\n",
+					"   <td>2.0</td>\r\n",
+					"   <td>Updated for SDLH v2.1</td>\r\n",
 					"   <td></td>\r\n",
 					"  </tr>\r\n",
 					" </tbody>\r\n",
@@ -82,7 +89,20 @@
 					}
 				},
 				"source": [
-					"## Install Python Packages"
+					"## Configuration Sections"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Install Python Packages"
 				]
 			},
 			{
@@ -113,7 +133,7 @@
 					}
 				},
 				"source": [
-					"## Import Python Libraries"
+					"### Import Python Libraries"
 				]
 			},
 			{
@@ -179,7 +199,8 @@
 					}
 				},
 				"source": [
-					"## Set Spark Configuration"
+					"### Set Spark Configuration\r\n",
+					"- Fixes issue where pyspark and timestamps less than 1900-01-01T00:00:00 in parquet files aren't compatible with spark 3+ and delta tables."
 				]
 			},
 			{
@@ -213,7 +234,9 @@
 					}
 				},
 				"source": [
-					"## Import Utility Notebooks"
+					"### Import Utility Notebooks\r\n",
+					"- nb_util_sql_staged_etl_and_logging_py contains functions for metadata (extraction, preparation), connectivity, ETL and logging.\r\n",
+					"- nb_util_sql_query_py contains functions for source-target information schema mapping and programatical interaction with lakehouse databases."
 				]
 			},
 			{
@@ -262,7 +285,10 @@
 					}
 				},
 				"source": [
-					"## Toggle Parameters Cell"
+					"### Toggle Parameters Cell\r\n",
+					"- Please note that the below cell is marked with \"Parameters\". (Can be seen in the botton right hand corner of the cell)\r\n",
+					"- When the notebook is ran by a pipeline, dynamic parameter values are passed from the pipeline.\r\n",
+					"- The dynamic parameter values will appear as a cell below the \"Parameters\" cell, overriding any manually added ones."
 				]
 			},
 			{
@@ -283,12 +309,17 @@
 				},
 				"source": [
 					"# Pipeline Parameters\r\n",
-					"PARAM_TRIGGER_NAME = \"\"\r\n",
-					"PARAM_TRIGGER_TIME = \"\"\r\n",
-					"PARAM_TRIGGER_TYPE = \"\"\r\n",
-					"PARAM_PIPELINE_NAME = \"\"\r\n",
+					"PARAM_SOURCE_TYPE = \"\"\r\n",
+					"PARAM_SOURCE_SYSTEM = \"\"\r\n",
+					"PARAM_SOURCE_GROUPING_ID = \"\"\r\n",
 					"PARAM_STORAGE_QUEUE_NAME = \"\"\r\n",
-					"PARAM_PIPELINE_RUN_ID = \"\""
+					"PARAM_PIPELINE_NAME = \"\"\r\n",
+					"PARAM_PIPELINE_RUN_ID = \"\"\r\n",
+					"PARAM_TRIGGERING_PIPELINE_NAME = \"\"\r\n",
+					"PARAM_TRIGGERING_PIPELINE_RUN_ID = \"\"\r\n",
+					"PARAM_TRIGGER_NAME = \"\"\r\n",
+					"PARAM_TRIGGER_TYPE = \"\"\r\n",
+					"PARAM_TRIGGER_TIME = \"\""
 				],
 				"execution_count": 10
 			},
@@ -302,7 +333,14 @@
 					}
 				},
 				"source": [
-					"## Keyvault Variables"
+					"### Keyvault Variables\r\n",
+					"Reading environment-specific variables from AKV:\r\n",
+					"- Metadata SQL Server fully qualified domain name\r\n",
+					"- Storage account name (ADLS)\r\n",
+					"- AKV connection string\r\n",
+					"- Synapse Serverless SQL fully qualified domain name endpoint\r\n",
+					"- Synapse workspace name\r\n",
+					"- Environment name"
 				]
 			},
 			{
@@ -346,49 +384,8 @@
 					}
 				},
 				"source": [
-					"## Get Access Tokens"
-				]
-			},
-			{
-				"cell_type": "code",
-				"metadata": {
-					"jupyter": {
-						"source_hidden": false,
-						"outputs_hidden": false
-					},
-					"nteract": {
-						"transient": {
-							"deleting": false
-						}
-					}
-				},
-				"source": [
-					"# Get access token for Synapse Managed identity Auth\r\n",
-					"sql_access_token = mssparkutils.credentials.getConnectionStringOrCreds(\"azure_sql_sdlh_azir\")\r\n",
-					"\r\n",
-					"# Reconfigure access token for usage with pyodbc.connect\r\n",
-					"SQL_COPT_SS_ACCESS_TOKEN = 1256\r\n",
-					"\r\n",
-					"exp_token = b\"\"\r\n",
-					"for i in bytes(sql_access_token, \"UTF-8\"):\r\n",
-					"    exp_token += bytes({i})\r\n",
-					"    exp_token += bytes(1)\r\n",
-					"\r\n",
-					"sql_access_token_odbc = struct.pack(\"=i\", len(exp_token)) + exp_token"
-				],
-				"execution_count": 13
-			},
-			{
-				"cell_type": "markdown",
-				"metadata": {
-					"nteract": {
-						"transient": {
-							"deleting": false
-						}
-					}
-				},
-				"source": [
-					"## Global Variables"
+					"### Global Variables\r\n",
+					"- Set a number of reuseable variables"
 				]
 			},
 			{
@@ -417,6 +414,77 @@
 					"datalake_staged_container = \"enriched\""
 				],
 				"execution_count": 14
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Connectivity Sections"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Generate SQL Access Tokens\r\n",
+					"- Get SQL based access token using synapse managed identity.\r\n",
+					"- Once we get the token we complete config to make it useable by pyodbc."
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Get access token for Synapse Managed identity Auth\r\n",
+					"sql_access_token = mssparkutils.credentials.getConnectionStringOrCreds(\"azure_sql_data_no_param_azir\")\r\n",
+					"\r\n",
+					"# Reconfigure access token for usage with pyodbc.connect\r\n",
+					"SQL_COPT_SS_ACCESS_TOKEN = 1256\r\n",
+					"\r\n",
+					"exp_token = b\"\"\r\n",
+					"for i in bytes(sql_access_token, \"UTF-8\"):\r\n",
+					"    exp_token += bytes({i})\r\n",
+					"    exp_token += bytes(1)\r\n",
+					"\r\n",
+					"sql_access_token_odbc = struct.pack(\"=i\", len(exp_token)) + exp_token"
+				],
+				"execution_count": 13
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Metadata DB ODBC connection\r\n",
+					"- Using the pyodbc library, instantiate a connection between the Spark cluster and the Metadata DB."
+				]
 			},
 			{
 				"cell_type": "code",
@@ -453,7 +521,60 @@
 					}
 				},
 				"source": [
-					"## Prepare ETL Metadata"
+					"### ETL Queue API connection"
+				]
+			},
+			{
+				"cell_type": "code",
+				"metadata": {
+					"jupyter": {
+						"source_hidden": false,
+						"outputs_hidden": false
+					},
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"# Prepare the ETL Queue\r\n",
+					"queue_client = QueueClient.from_connection_string(conn_str = datalake_connection_string, queue_name = PARAM_STORAGE_QUEUE_NAME)\r\n",
+					"messages = queue_client.receive_messages(visibility_timeout = 3600)\r\n",
+					"migrated_to_raw = messages.by_page()\r\n",
+					"\r\n",
+					"etl_queue = []\r\n",
+					"for batch in migrated_to_raw:\r\n",
+					"    for table_msg in batch:\r\n",
+					"        table = table_msg.content\r\n",
+					"        etl_queue.append(table)"
+				],
+				"execution_count": null
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Metadata Sections"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Extract metadata from the Metadata DB"
 				]
 			},
 			{
@@ -488,7 +609,7 @@
 					}
 				},
 				"source": [
-					"## Raw To Enriched ETL"
+					"### Prepare ETL metadata instructions (table level)"
 				]
 			},
 			{
@@ -510,51 +631,6 @@
 				"execution_count": 17
 			},
 			{
-				"cell_type": "code",
-				"metadata": {
-					"jupyter": {
-						"source_hidden": false,
-						"outputs_hidden": false
-					},
-					"nteract": {
-						"transient": {
-							"deleting": false
-						}
-					}
-				},
-				"source": [
-					"# Prepare the ETL Queue\r\n",
-					"queue_client = QueueClient.from_connection_string(conn_str = datalake_connection_string, queue_name = PARAM_STORAGE_QUEUE_NAME)\r\n",
-					"messages = queue_client.receive_messages(visibility_timeout = 3600)\r\n",
-					"migrated_to_raw = messages.by_page()\r\n",
-					"etl_queue = []\r\n",
-					"for batch in migrated_to_raw:\r\n",
-					"    for table_msg in batch:\r\n",
-					"        table = table_msg.content\r\n",
-					"        etl_queue.append(table)"
-				],
-				"execution_count": 18
-			},
-			{
-				"cell_type": "code",
-				"metadata": {
-					"jupyter": {
-						"source_hidden": false,
-						"outputs_hidden": false
-					},
-					"nteract": {
-						"transient": {
-							"deleting": false
-						}
-					}
-				},
-				"source": [
-					"for table in etl_queue:\r\n",
-					"    raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME,PARAM_TRIGGER_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_RUN_ID ,staged_instructions)"
-				],
-				"execution_count": 19
-			},
-			{
 				"cell_type": "markdown",
 				"metadata": {
 					"nteract": {
@@ -564,7 +640,9 @@
 					}
 				},
 				"source": [
-					"## Creating Serverless SQL Pool And External Tables"
+					"### Prepare Lakehouse metadata instructions (column level)\r\n",
+					"- Source-target datatype mapping.\r\n",
+					"- Generate dictionary containing Lakehouse metadata instructions only for tables in the current batch."
 				]
 			},
 			{
@@ -582,9 +660,25 @@
 					"collapsed": false
 				},
 				"source": [
-					"information_schemas = map_data_types(df_information_schema)"
+					"information_schemas = map_data_types(df_information_schema)\r\n",
+					"\r\n",
+					"tables_list = information_schemas.select('TABLE_NAME').distinct().rdd.flatMap(lambda x:x).collect()#etl_queue\r\n",
+					"external_tables_instructions = ext_table_mapping(tables_list, information_schemas, staged_instructions, datalake_staged_container)"
 				],
 				"execution_count": null
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"## Raw To Enriched ETL Sections"
+				]
 			},
 			{
 				"cell_type": "code",
@@ -600,10 +694,27 @@
 					}
 				},
 				"source": [
-					"tables_list = etl_queue\r\n",
-					"external_tables_instructions = ext_table_mapping(\"SQL\")\r\n",
+					"CURRENT_VERSIONS = get_delta_versions(tables_list= etl_queue, staged_instructions= staged_instructions)\r\n",
+					"try:\r\n",
+					"    tables_ingested_successfully = []\r\n",
+					"    print(\"Starting tables ingestion...\")\r\n",
+					"    for table in etl_queue:\r\n",
+					"        raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME, PARAM_TRIGGER_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_NAME, PARAM_PIPELINE_RUN_ID ,staged_instructions)\r\n",
+					"        tables_ingested_successfully.append(table)\r\n",
+					"    print(\"All of the tables in the batch were ingested successfully.\")\r\n",
 					"\r\n",
-					"#print(external_tables_instructions)"
+					"except Exception as exception:\r\n",
+					"    print(\"=====================================================================\")\r\n",
+					"    print(\"A table has failed. Restoring the current batch tables.\")\r\n",
+					"    print(f\"Delta tables to roll back: {', '.join(map(str, tables_ingested_successfully))}\") \r\n",
+					"    # Get current version for delta tables that have been processed prior to error\r\n",
+					"    #  and revert the delta tables to their state at notebook runtime\r\n",
+					"    rollback_requirements = CURRENT_VERSIONS\r\n",
+					"    if rollback_requirements:\r\n",
+					"        rollback_deltatables(rollback_versions=rollback_requirements, successful_ingestions=tables_ingested_successfully)\r\n",
+					"        print(\"Delta tables restored.\")\r\n",
+					"\r\n",
+					"    raise RuntimeError(exception)"
 				],
 				"execution_count": null
 			},
@@ -617,7 +728,27 @@
 					}
 				},
 				"source": [
-					"## Creation of Serverless SQL DB pre-requisites if they don't exist"
+					"## Lakehouse Creation/Expansion Sections"
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"metadata": {
+					"nteract": {
+						"transient": {
+							"deleting": false
+						}
+					}
+				},
+				"source": [
+					"### Serverless SQL DB pre-requisites\r\n",
+					"\r\n",
+					"The following pre-requisites are created if they don't already exist:\r\n",
+					"- Lakehouse database\r\n",
+					"- Lakehouse schema\r\n",
+					"- Enriched external data source\r\n",
+					"- External file formats\r\n",
+					"- Master Key Encryption"
 				]
 			},
 			{
@@ -648,7 +779,8 @@
 					}
 				},
 				"source": [
-					"## Creation of external tables if they don't exist"
+					"### Serverless SQL DB external tables\r\n",
+					"- External tables are created if they don't exist, using the pre-requisites."
 				]
 			},
 			{
@@ -682,8 +814,7 @@
 					"    except Exception as err_message:\r\n",
 					"        print(err_message)\r\n",
 					"        list_errors.append({\"table_name\": input_table_name, \"error\":err_message})\r\n",
-					"        raise err_message\r\n",
-					""
+					"        raise err_message"
 				],
 				"execution_count": null
 			}

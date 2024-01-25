@@ -1,8 +1,8 @@
 {
-	"name": "sdlh_mysql_db_table",
+	"name": "sdlh_azuresql_db_table",
 	"properties": {
 		"linkedServiceName": {
-			"referenceName": "mysql_sdlh_shir",
+			"referenceName": "azure_sql_sdlh_azir",
 			"type": "LinkedServiceReference",
 			"parameters": {
 				"CONNECTION_STRING_SECRET_NAME": {
@@ -15,6 +15,9 @@
 			"SOURCE_CONNECTION_STRING": {
 				"type": "string"
 			},
+			"SCHEMA_NAME": {
+				"type": "string"
+			},
 			"TABLE_NAME": {
 				"type": "string"
 			}
@@ -23,14 +26,17 @@
 			"name": "SDLH"
 		},
 		"annotations": [],
-		"type": "MySqlTable",
+		"type": "AzureSqlTable",
 		"schema": [],
 		"typeProperties": {
-			"tableName": {
+			"schema": {
+				"value": "@dataset().SCHEMA_NAME",
+				"type": "Expression"
+			},
+			"table": {
 				"value": "@dataset().TABLE_NAME",
 				"type": "Expression"
 			}
 		}
-	},
-	"type": "Microsoft.Synapse/workspaces/datasets"
+	}
 }

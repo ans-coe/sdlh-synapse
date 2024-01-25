@@ -1,0 +1,1270 @@
+{
+	"name": "sdlh_sql_count_source_and_target_rows",
+	"properties": {
+		"description": "Loops through each table and performs SELECT COUNT(*) FROM TABLE_NAME for each table in the source system and in the serverless pool",
+		"activities": [
+			{
+				"name": "get_object_metadata",
+				"description": "gets a list of objects from ETL.JsonMetadata.OBJECT_NAME, which is used to construct the row counts queries in the subsequent loop ",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [OBJECT_NAME] FROM [ETL].[JsonMetadata] \nWHERE \nSOURCE_SYSTEM= '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' \nAND\nSOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND IS_ENABLED = '@{pipeline().parameters.PARAM_IS_ENABLED}'\n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "each_table_row_count",
+				"description": "For each OBJECT_NAME in the previous lookup activity, this activity will read the ETL.JsonMetadata.OBJECT_PARAMETERS json object, which contains all the information required to construct the following source system row count query.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "get_object_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('get_object_metadata').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "switch_source_type",
+							"description": "Select the correct source type based on the PARAM_SOURCE_TYPE",
+							"type": "Switch",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"on": {
+									"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+									"type": "Expression"
+								},
+								"cases": [
+									{
+										"value": "SQL_SERVER",
+										"activities": [
+											{
+												"name": "object_parameter",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT [OBJECT_PARAMETERS] FROM [ETL].[JsonMetadata]\nWHERE [JsonMetadata].[OBJECT_NAME] = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "source_row_counts",
+												"description": "using the items in the prior lookup, this activity constructs a SQL count(*) FROM [table_name] in order to return a row count for each object in the source system that is being tested",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "object_parameter",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlServerSource",
+														"sqlReaderQuery": {
+															"value": "select COUNT(*) AS source_row_count from @{json(activity('object_parameter').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}.@{json(activity('object_parameter').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_sql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@json(activity('object_parameter').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "na",
+															"TABLE_NAME": "na"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "target_object_parameter",
+												"description": "This lookup gets the required information from the metadata database that will be using in the following activity to construct a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "source_row_counts",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "target_row_counts",
+												"description": "This lookup constructs a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "target_object_parameter",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlDWSource",
+														"sqlReaderQuery": {
+															"value": "USE @{activity('target_object_parameter').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}\n\nSELECT COUNT(*) AS sink_row_count\nFROM \"@{activity('target_object_parameter').output.firstRow.SERVERLESS_SQL_POOL_SCHEMA}\".\"@{activity('target_object_parameter').output.firstRow.TABLE_NAME}\"\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "serverless_metadata",
+														"type": "DatasetReference"
+													}
+												}
+											},
+											{
+												"name": "insert_into_ETL_LogRowCounts",
+												"description": "This stored proc writes the results of the source and target system row counts queries to a table in the metadata database",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "target_row_counts",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_InsertLogRowCounts]",
+													"storedProcedureParameters": {
+														"PIPELINE_RUN_ID": {
+															"value": {
+																"value": "@pipeline().RunId",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM": {
+															"value": {
+																"value": "@{json(activity('object_parameter').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('source_row_counts').output.firstRow.source_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"START_TIME": {
+															"value": {
+																"value": "@utcNow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"TABLE_NAME": {
+															"value": {
+																"value": "@{json(activity('object_parameter').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM": {
+															"value": {
+																"value": "@{activity('target_object_parameter').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('target_row_counts').output.firstRow.sink_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											}
+										]
+									},
+									{
+										"value": "AZURE_SQL",
+										"activities": [
+											{
+												"name": "object_parameter_az_sql",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT [OBJECT_PARAMETERS] FROM [ETL].[JsonMetadata]\nWHERE [JsonMetadata].[OBJECT_NAME] = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "source_row_counts_az_sql",
+												"description": "using the items in the prior lookup, this activity constructs a SQL count(*) FROM [table_name] in order to return a row count for each object in the source system that is being tested",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_az_sql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "select COUNT(*) AS source_row_count from @{json(activity('object_parameter_az_sql').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}.@{json(activity('object_parameter_az_sql').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@json(activity('object_parameter_az_sql').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "na",
+															"TABLE_NAME": "na"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "target_object_parameter_az_sql",
+												"description": "This lookup gets the required information from the metadata database that will be using in the following activity to construct a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "source_row_counts_az_sql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "target_row_counts_az_sql",
+												"description": "This lookup constructs a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "target_object_parameter_az_sql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlDWSource",
+														"sqlReaderQuery": {
+															"value": "USE @{activity('target_object_parameter_az_sql').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}\n\nSELECT COUNT(*) AS sink_row_count\nFROM \"@{activity('target_object_parameter_az_sql').output.firstRow.SERVERLESS_SQL_POOL_SCHEMA}\".\"@{activity('target_object_parameter_az_sql').output.firstRow.TABLE_NAME}\"\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "serverless_metadata",
+														"type": "DatasetReference"
+													}
+												}
+											},
+											{
+												"name": "insert_into_ETL_LogRowCounts_az_sql",
+												"description": "This stored proc writes the results of the source and target system row counts queries to a table in the metadata database",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "target_row_counts_az_sql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_InsertLogRowCounts]",
+													"storedProcedureParameters": {
+														"PIPELINE_RUN_ID": {
+															"value": {
+																"value": "@pipeline().RunId",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM": {
+															"value": {
+																"value": "@{json(activity('object_parameter_az_sql').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('source_row_counts_az_sql').output.firstRow.source_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"START_TIME": {
+															"value": {
+																"value": "@utcNow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"TABLE_NAME": {
+															"value": {
+																"value": "@{json(activity('object_parameter_az_sql').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM": {
+															"value": {
+																"value": "@{activity('target_object_parameter_az_sql').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('target_row_counts_az_sql').output.firstRow.sink_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											}
+										]
+									},
+									{
+										"value": "MY_SQL",
+										"activities": [
+											{
+												"name": "object_parameter_mysql",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT [OBJECT_PARAMETERS] FROM [ETL].[JsonMetadata]\nWHERE [JsonMetadata].[OBJECT_NAME] = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "source_row_counts_mysql",
+												"description": "using the items in the prior lookup, this activity constructs a SQL count(*) FROM [table_name] in order to return a row count for each object in the source system that is being tested",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_mysql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "MySqlSource",
+														"query": {
+															"value": "select COUNT(*) AS source_row_count from `@{json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}`",
+															"type": "Expression"
+														}
+													},
+													"dataset": {
+														"referenceName": "sdlh_mysql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"TABLE_NAME": "na"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "target_object_parameter_mysql",
+												"description": "This lookup gets the required information from the metadata database that will be using in the following activity to construct a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "source_row_counts_mysql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "target_row_counts_mysql",
+												"description": "This lookup constructs a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "target_object_parameter_mysql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlDWSource",
+														"sqlReaderQuery": {
+															"value": "USE @{activity('target_object_parameter_mysql').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}\n\nSELECT COUNT(*) AS sink_row_count\nFROM \"@{activity('target_object_parameter_mysql').output.firstRow.SERVERLESS_SQL_POOL_SCHEMA}\".\"@{activity('target_object_parameter_mysql').output.firstRow.TABLE_NAME}\"\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "serverless_metadata",
+														"type": "DatasetReference"
+													}
+												}
+											},
+											{
+												"name": "insert_into_ETL_LogRowCounts_mysql",
+												"description": "This stored proc writes the results of the source and target system row counts queries to a table in the metadata database",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "target_row_counts_mysql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_InsertLogRowCounts]",
+													"storedProcedureParameters": {
+														"PIPELINE_RUN_ID": {
+															"value": {
+																"value": "@pipeline().RunId",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM": {
+															"value": {
+																"value": "@{json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('source_row_counts_mysql').output.firstRow.source_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"START_TIME": {
+															"value": {
+																"value": "@utcNow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"TABLE_NAME": {
+															"value": {
+																"value": "@{json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM": {
+															"value": {
+																"value": "@{activity('target_object_parameter_mysql').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('target_row_counts_mysql').output.firstRow.sink_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											}
+										]
+									},
+									{
+										"value": "POSTGRE_SQL",
+										"activities": [
+											{
+												"name": "object_parameter_postgres",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT [OBJECT_PARAMETERS] FROM [ETL].[JsonMetadata]\nWHERE [JsonMetadata].[OBJECT_NAME] = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "source_row_counts_postgres",
+												"description": "using the items in the prior lookup, this activity constructs a SQL count(*) FROM [table_name] in order to return a row count for each object in the source system that is being tested",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_postgres",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "PostgreSqlSource",
+														"query": {
+															"value": "select COUNT(*) AS source_row_count from @{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}.@{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+															"type": "Expression"
+														}
+													},
+													"dataset": {
+														"referenceName": "sdlh_postgresql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "na",
+															"TABLE_NAME": "na"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "target_object_parameter_postgres",
+												"description": "This lookup gets the required information from the metadata database that will be using in the following activity to construct a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "source_row_counts_postgres",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "target_row_counts_postgres",
+												"description": "This lookup constructs a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "target_object_parameter_postgres",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlDWSource",
+														"sqlReaderQuery": {
+															"value": "USE @{activity('target_object_parameter_postgres').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}\n\nSELECT COUNT(*) AS sink_row_count\nFROM \"@{activity('target_object_parameter_postgres').output.firstRow.SERVERLESS_SQL_POOL_SCHEMA}\".\"@{activity('target_object_parameter_postgres').output.firstRow.TABLE_NAME}\"\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "serverless_metadata",
+														"type": "DatasetReference"
+													}
+												}
+											},
+											{
+												"name": "insert_into_ETL_LogRowCounts_postgres",
+												"description": "This stored proc writes the results of the source and target system row counts queries to a table in the metadata database",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "target_row_counts_postgres",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_InsertLogRowCounts]",
+													"storedProcedureParameters": {
+														"PIPELINE_RUN_ID": {
+															"value": {
+																"value": "@pipeline().RunId",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM": {
+															"value": {
+																"value": "@{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('source_row_counts_postgres').output.firstRow.source_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"START_TIME": {
+															"value": {
+																"value": "@utcNow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"TABLE_NAME": {
+															"value": {
+																"value": "@{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM": {
+															"value": {
+																"value": "@{activity('target_object_parameter_postgres').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('target_row_counts_postgres').output.firstRow.sink_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											}
+										]
+									},
+									{
+										"value": "AZURE_SQL_MI",
+										"activities": [
+											{
+												"name": "object_parameter_az_sql_mi",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT [OBJECT_PARAMETERS] FROM [ETL].[JsonMetadata]\nWHERE [JsonMetadata].[OBJECT_NAME] = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "source_row_counts_az_sql_mi",
+												"description": "using the items in the prior lookup, this activity constructs a SQL count(*) FROM [table_name] in order to return a row count for each object in the source system that is being tested",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_az_sql_mi",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "select COUNT(*) AS source_row_count from @{json(activity('object_parameter_az_sql_mi').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}.@{json(activity('object_parameter_az_sql_mi').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresqlmi_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@json(activity('object_parameter_az_sql_mi').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "na",
+															"TABLE_NAME": "na"
+														}
+													},
+													"firstRowOnly": true
+												}
+											},
+											{
+												"name": "target_object_parameter_az_sql_mi",
+												"description": "This lookup gets the required information from the metadata database that will be using in the following activity to construct a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "source_row_counts_az_sql_mi",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderQuery": {
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "target_row_counts_az_sql_mi",
+												"description": "This lookup constructs a SELCT count(*) FROM that targets the corresponding EXTERNAL_TABLE in the Synapse serverless pool.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "target_object_parameter_az_sql_mi",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlDWSource",
+														"sqlReaderQuery": {
+															"value": "USE @{activity('target_object_parameter_az_sql_mi').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}\n\nSELECT COUNT(*) AS sink_row_count\nFROM \"@{activity('target_object_parameter_az_sql_mi').output.firstRow.SERVERLESS_SQL_POOL_SCHEMA}\".\"@{activity('target_object_parameter_az_sql_mi').output.firstRow.TABLE_NAME}\"\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "serverless_metadata",
+														"type": "DatasetReference"
+													}
+												}
+											},
+											{
+												"name": "insert_into_ETL_LogRowCounts_az_sql_mi",
+												"description": "This stored proc writes the results of the source and target system row counts queries to a table in the metadata database",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "target_row_counts_az_sql_mi",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_InsertLogRowCounts]",
+													"storedProcedureParameters": {
+														"PIPELINE_RUN_ID": {
+															"value": {
+																"value": "@pipeline().RunId",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM": {
+															"value": {
+																"value": "@{json(activity('object_parameter_az_sql_mi').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"SOURCE_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('source_row_counts_az_sql_mi').output.firstRow.source_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"START_TIME": {
+															"value": {
+																"value": "@utcNow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"TABLE_NAME": {
+															"value": {
+																"value": "@{json(activity('object_parameter_az_sql_mi').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM": {
+															"value": {
+																"value": "@{activity('target_object_parameter_az_sql_mi').output.firstRow.SERVERLESS_SQL_POOL_DATABASE}",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"TARGET_SYSTEM_ROW_COUNT": {
+															"value": {
+																"value": "@{activity('target_row_counts_az_sql_mi').output.firstRow.sink_row_count}",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											}
+										]
+									}
+								]
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "SQL_SERVER"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_IS_ENABLED": {
+				"type": "string",
+				"defaultValue": "1"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"annotations": []
+	}
+}

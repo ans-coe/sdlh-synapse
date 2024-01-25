@@ -1,0 +1,696 @@
+{
+	"name": "sdlh_sql_load",
+	"properties": {
+		"activities": [
+			{
+				"name": "create_storage_queue",
+				"description": "Creates a temp queue on the datalake storage account.",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "set_storage_queue_name",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "set_trigger_time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"method": "PUT",
+					"headers": {
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-version": "2021-04-10"
+					},
+					"body": "NA",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "delete_storage_queue",
+				"description": "Deletes the temp queue created on the datalake storage account.",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "if_enriched_is_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": {
+						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"method": "DELETE",
+					"headers": {
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-version": "2021-04-10"
+					},
+					"body": "NA",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "set_storage_queue_name",
+				"description": "Uses pipeline RunId to generate an unique queue name to be used by all downstream activities.",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_STORAGE_QUEUE_NAME",
+					"value": {
+						"value": "@concat('etl-queue-',pipeline().RunId)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "set_trigger_time",
+				"description": "Set current datetime, setting as variable means it will be constant across all downstream activities.",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_TRIGGER_TIME",
+					"value": {
+						"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "if_enriched_is_required",
+				"description": "Check if enriching processes are passed in as true before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_tables_full_load_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_tables_change_tracking_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_tables_watermark_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER,true)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_enriched_delta",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_enriched_delta_external_tables",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_STORAGE_QUEUE_NAME": {
+										"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_PIPELINE_NAME": {
+										"value": "@pipeline().Pipeline",
+										"type": "Expression"
+									},
+									"PARAM_PIPELINE_RUN_ID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGER_NAME": {
+										"value": "@pipeline().TriggerName",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGER_TYPE": {
+										"value": "@pipeline().TriggerType",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGER_TIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_full_load",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is FULL_LOAD or CHANGE_TRACKING where LAST_CHANGE_TRACKING_VALUE IS NULL",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "create_storage_queue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [LOAD_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n    ,[PRIMARY_KEYS]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND ( [LOAD_TYPE] = 'FULL_LOAD' OR ( [LOAD_TYPE] = 'CHANGE_TRACKING' AND [LAST_CHANGE_TRACKING_VALUE] IS NULL) )",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_tables_full_load_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_full_load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_full_load').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_sql_full_load",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_sql_full_load",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_STORAGE_ACCOUNT": {
+										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_NAME": {
+										"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_DATETIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_tables_change_tracking_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_change_tracking",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_change_tracking').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_sql_change_tracking_incremental_load",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_sql_change_tracking_incremental_load",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_STORAGE_ACCOUNT": {
+										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_NAME": {
+										"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_DATETIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_change_tracking",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is CHANGE_TRACKING and LAST_CHANGE_TRACKING_VALUE IS NOT NULL",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "create_storage_queue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [LOAD_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n    ,[PRIMARY_KEYS]\n    ,[LAST_CHANGE_TRACKING_VALUE]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CHANGE_TRACKING'\nAND [LAST_CHANGE_TRACKING_VALUE] IS NOT NULL",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_tables_watermark_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_watermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_watermark').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_sql_high_watermark_incremental_load",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_sql_high_watermark_incremental_load",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_STORAGE_ACCOUNT": {
+										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_NAME": {
+										"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_DATETIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_watermark",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is WATERMARK.  ( If LAST_WATERMARK_VALUE IS NULL it uses datetime value of '1900-01-01 00:00:00' to simulate a first run scenario )",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "create_storage_queue",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [LOAD_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_tables_change_tracking_update_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_enriched_is_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(greater(activity('lookup_tables_change_tracking').output.count,0),greater(activity('lookup_tables_full_load').output.count,0))\r\n",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_sql_change_tracking_update",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_sql_change_tracking_update",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_PIPELINE_RUN_ID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_tables_watermark_update_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_enriched_is_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_watermark').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_sql_high_watermark_update",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_sql_high_watermark_update",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_PIPELINE_RUN_ID": {
+										"value": "@pipeline().RunId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "SQL_SERVER"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"PARAM_DEPLOY_ENRICHED_LAYER": {
+				"type": "bool",
+				"defaultValue": true
+			}
+		},
+		"variables": {
+			"VAR_TRIGGER_TIME": {
+				"type": "String"
+			},
+			"VAR_STORAGE_QUEUE_NAME": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "SDLH/SQL_Server"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T16:57:45Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

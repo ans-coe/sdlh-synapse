@@ -3,18 +3,12 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "for_each_table_etl",
-				"description": "This for loop iterates through the each TABLE_NAME from ETL.SourceTable. Using the table name, it is able to grab the relevant metadata, and construct the query to retrieve the source data.",
+				"name": "for_each_full_load_table",
+				"description": "This for loop iterates through the each required item from ETL.SQLTableMetadata and copies required data from source to datalake RAW",
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "retrieve_batch_metadata",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
-						"activity": "create_storage_queue",
+						"activity": "lookup_tables_full_load",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -23,436 +17,13 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('retrieve_batch_metadata').output.value",
+						"value": "@activity('lookup_tables_full_load').output.value",
 						"type": "Expression"
 					},
 					"activities": [
 						{
-							"name": "post_table_to_storage_queue",
-							"description": "POST the table name into the Azure Storage Queue. In there, it is also assigned a timestamp.",
-							"type": "WebActivity",
-							"dependsOn": [
-								{
-									"activity": "update_etl_log_on_success_full_load",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"url": {
-									"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'), '/messages?visibilitytimeout=30&timeout=30')",
-									"type": "Expression"
-								},
-								"connectVia": {
-									"referenceName": "AutoResolveIntegrationRuntime",
-									"type": "IntegrationRuntimeReference"
-								},
-								"method": "POST",
-								"headers": {
-									"x-ms-version": "2021-04-10",
-									"x-ms-date": {
-										"value": "@formatDateTime(utcnow(),'r')",
-										"type": "Expression"
-									}
-								},
-								"body": {
-									"value": "@concat('<QueueMessage><MessageText>', json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME, '</MessageText></QueueMessage>')",
-									"type": "Expression"
-								},
-								"authentication": {
-									"type": "MSI",
-									"resource": "https://storage.azure.com/"
-								}
-							}
-						},
-						{
-							"name": "copy_sql_to_parquet_full_load",
-							"description": "This is a full load copy activity reserved for tables with no specified WATERMARK_FIELD in the ETL.ETL_WATERMARK table in the metadata DB, or 'NA'.",
-							"type": "Copy",
-							"dependsOn": [
-								{
-									"activity": "create_log_entry_full_load",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "SqlServerSource",
-									"sqlReaderQuery": {
-										"value": "select @{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].COLUMNS_META} from [@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}].[@{json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}] S",
-										"type": "Expression"
-									},
-									"queryTimeout": "02:00:00",
-									"partitionOption": "None"
-								},
-								"sink": {
-									"type": "ParquetSink",
-									"storeSettings": {
-										"type": "AzureBlobFSWriteSettings"
-									},
-									"formatSettings": {
-										"type": "ParquetWriteSettings"
-									}
-								},
-								"enableStaging": false,
-								"translator": {
-									"type": "TabularTranslator",
-									"typeConversion": true,
-									"typeConversionSettings": {
-										"allowDataTruncation": true,
-										"treatBooleanAsNumber": false
-									}
-								}
-							},
-							"inputs": [
-								{
-									"referenceName": "sdlh_sql_db_table",
-									"type": "DatasetReference",
-									"parameters": {
-										"SOURCE_SYSTEM": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM",
-											"type": "Expression"
-										},
-										"DATABASE_NAME": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].DATABASE_NAME",
-											"type": "Expression"
-										},
-										"SCHEMA_NAME": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME",
-											"type": "Expression"
-										},
-										"TABLE_NAME": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
-											"type": "Expression"
-										},
-										"SOURCE_SYSTEM_CONNECTION_STRING": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM_CONNECTION_STRING",
-											"type": "Expression"
-										},
-										"COLUMNS_META": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].COLUMNS_META",
-											"type": "Expression"
-										}
-									}
-								}
-							],
-							"outputs": [
-								{
-									"referenceName": "sdlh_gen2_parquet_snappy",
-									"type": "DatasetReference",
-									"parameters": {
-										"FP0": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
-											"type": "Expression"
-										},
-										"FP1": {
-											"value": "@concat(json(activity('retrieve_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('retrieve_object_metadata').output.firstRow.HNS)",
-											"type": "Expression"
-										},
-										"OBJECT_NAME": {
-											"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
-											"type": "Expression"
-										}
-									}
-								}
-							]
-						},
-						{
-							"name": "create_log_entry_full_load",
-							"description": "This lookup runs a stored procedure which initializes the ETL log in the ETL.Log table. This is due to the limited programmability capability of the pipeline.\nThis activity does half of the logging for a full load.",
-							"type": "Lookup",
-							"dependsOn": [
-								{
-									"activity": "retrieve_object_metadata",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "AzureSqlSource",
-									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
-									"storedProcedureParameters": {
-										"COMPONENT_NAME": {
-											"type": "String",
-											"value": "copy_sql_to_parquet_full_load"
-										},
-										"DELETES": {
-											"type": "Int32",
-											"value": null
-										},
-										"DURATION_SECONDS": {
-											"type": "Int32",
-											"value": null
-										},
-										"END_TIME": {
-											"type": "DateTime",
-											"value": null
-										},
-										"ERROR_MESSAGE": {
-											"type": "String",
-											"value": null
-										},
-										"INSERTS": {
-											"type": "Int32",
-											"value": null
-										},
-										"OPERATION": {
-											"type": "String",
-											"value": "Copy Activity"
-										},
-										"PIPELINE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().Pipeline",
-												"type": "Expression"
-											}
-										},
-										"PIPELINE_RUN_ID": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().RunId",
-												"type": "Expression"
-											}
-										},
-										"SCHEMA_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME",
-												"type": "Expression"
-											}
-										},
-										"SOURCE_SYSTEM": {
-											"type": "String",
-											"value": {
-												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_SYSTEM",
-												"type": "Expression"
-											}
-										},
-										"START_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@utcnow()",
-												"type": "Expression"
-											}
-										},
-										"TABLE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@json(activity('retrieve_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
-												"type": "Expression"
-											}
-										},
-										"TARGET_SYSTEM": {
-											"type": "String",
-											"value": "ADLS_RAW"
-										},
-										"TRIGGER_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerName",
-												"type": "Expression"
-											}
-										},
-										"TRIGGER_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@pipeline().TriggerTime",
-												"type": "Expression"
-											}
-										},
-										"TRIGGER_TYPE": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerType",
-												"type": "Expression"
-											}
-										},
-										"UPDATES": {
-											"type": "Int32",
-											"value": null
-										}
-									},
-									"queryTimeout": "02:00:00",
-									"partitionOption": "None"
-								},
-								"dataset": {
-									"referenceName": "sdlh_azsql_db_metadata",
-									"type": "DatasetReference",
-									"parameters": {
-										"METADATA_TABLE_NAME": "NA"
-									}
-								},
-								"firstRowOnly": false
-							}
-						},
-						{
-							"name": "update_etl_log_on_success_full_load",
-							"description": "Stored procedure to complete the logging for the copy activity 'copy_sql_to_parquet_full_load', on success.",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "copy_sql_to_parquet_full_load",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[ETL].[usp_UpdateLog]",
-								"storedProcedureParameters": {
-									"DELETES": {
-										"value": null,
-										"type": "Int32"
-									},
-									"DURATION_SECONDS": {
-										"value": {
-											"value": "@activity('copy_sql_to_parquet_full_load').output.copyDuration",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"END_TIME": {
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										},
-										"type": "DateTime"
-									},
-									"ERROR_MESSAGE": {
-										"value": null,
-										"type": "String"
-									},
-									"LOG_ID": {
-										"value": {
-											"value": "@activity('create_log_entry_full_load').output.value[0].EtlLogId",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"INSERTS": {
-										"value": {
-											"value": "@activity('copy_sql_to_parquet_full_load').output.rowsCopied",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"UPDATES": {
-										"value": null,
-										"type": "Int32"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "azure_sql_sdlh_azir",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
-							"name": "update_etl_log_on_failure_full_load",
-							"description": "Stored procedure to complete the logging for the copy activity 'copy_sql_to_parquet_full_load', on failure.",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "copy_sql_to_parquet_full_load",
-									"dependencyConditions": [
-										"Failed"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[ETL].[usp_UpdateLog]",
-								"storedProcedureParameters": {
-									"DELETES": {
-										"value": null,
-										"type": "Int32"
-									},
-									"DURATION_SECONDS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"END_TIME": {
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										},
-										"type": "DateTime"
-									},
-									"ERROR_MESSAGE": {
-										"value": {
-											"value": "@activity('copy_sql_to_parquet_full_load').output.errors[0].Message",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"LOG_ID": {
-										"value": {
-											"value": "@activity('create_log_entry_full_load').output.value[0].LOG_ID",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"INSERTS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"UPDATES": {
-										"value": null,
-										"type": "Int32"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "azure_sql_sdlh_azir",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
-							"name": "retrieve_object_metadata",
+							"name": "lookup_object_metadata_full_load",
+							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
@@ -466,33 +37,40 @@
 							"typeProperties": {
 								"source": {
 									"type": "AzureSqlSource",
-									"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineTriggerMetadataRetrieval]",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineMetadataRetrieval]",
 									"storedProcedureParameters": {
-										"OBJECT_NAME": {
+										"PARAM_DATETIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_DATETIME",
+												"type": "Expression"
+											}
+										},
+										"PARAM_OBJECT_NAME": {
 											"type": "String",
 											"value": {
 												"value": "@item().OBJECT_NAME",
 												"type": "Expression"
 											}
 										},
-										"PIPELINE_NAME": {
-											"type": "String",
+										"PARAM_SOURCE_GROUPING_ID": {
+											"type": "Int32",
 											"value": {
-												"value": "@pipeline().Pipeline",
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
 												"type": "Expression"
 											}
 										},
-										"PIPELINE_TRIGGER_NAME": {
+										"PARAM_SOURCE_SYSTEM": {
 											"type": "String",
 											"value": {
-												"value": "@pipeline().TriggerName",
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
 												"type": "Expression"
 											}
 										},
-										"PIPELINE_CURRENT_DATETIME": {
-											"type": "DateTime",
+										"PARAM_SOURCE_TYPE": {
+											"type": "String",
 											"value": {
-												"value": "@variables('VAR_TRIGGER_TIME')",
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
 												"type": "Expression"
 											}
 										}
@@ -501,7 +79,7 @@
 									"partitionOption": "None"
 								},
 								"dataset": {
-									"referenceName": "sdlh_azsql_db_metadata",
+									"referenceName": "sdlh_azuresql_db_metadata",
 									"type": "DatasetReference",
 									"parameters": {
 										"METADATA_TABLE_NAME": "NA"
@@ -509,105 +87,1092 @@
 								},
 								"firstRowOnly": true
 							}
+						},
+						{
+							"name": "switch_load_type",
+							"description": "Switch the required activities based on LOAD_TYPE",
+							"type": "Switch",
+							"dependsOn": [
+								{
+									"activity": "lookup_object_metadata_full_load",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"on": {
+									"value": "@item().LOAD_TYPE",
+									"type": "Expression"
+								},
+								"cases": [
+									{
+										"value": "FULL_LOAD",
+										"activities": [
+											{
+												"name": "copy_sql_to_parquet_raw_full_load",
+												"description": "Copy activity that takes SQL server tables and writes them as Parquet in the RAW hierarchical namespace within ADLS.",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "create_log_entry_full_load",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlServerSource",
+														"sqlReaderQuery": {
+															"value": "SELECT @{item().COLUMNS_META}\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"sink": {
+														"type": "ParquetSink",
+														"storeSettings": {
+															"type": "AzureBlobFSWriteSettings"
+														},
+														"formatSettings": {
+															"type": "ParquetWriteSettings"
+														}
+													},
+													"enableStaging": false,
+													"translator": {
+														"type": "TabularTranslator",
+														"typeConversion": true,
+														"typeConversionSettings": {
+															"allowDataTruncation": true,
+															"treatBooleanAsNumber": false
+														}
+													}
+												},
+												"inputs": [
+													{
+														"referenceName": "sdlh_sql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@item().SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "NA",
+															"TABLE_NAME": "NA"
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "sdlh_gen2_parquet_snappy",
+														"type": "DatasetReference",
+														"parameters": {
+															"FP0": {
+																"value": "@json(activity('lookup_object_metadata_full_load').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+																"type": "Expression"
+															},
+															"FP1": {
+																"value": "@concat(json(activity('lookup_object_metadata_full_load').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_full_load').output.firstRow.HNS)",
+																"type": "Expression"
+															},
+															"OBJECT_NAME": {
+																"value": "@json(activity('lookup_object_metadata_full_load').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+																"type": "Expression"
+															}
+														}
+													}
+												]
+											},
+											{
+												"name": "create_log_entry_full_load",
+												"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+														"storedProcedureParameters": {
+															"COMPONENT_NAME": {
+																"type": "String",
+																"value": "copy_sql_to_raw_full-load"
+															},
+															"DATABASE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().DATABASE_NAME",
+																	"type": "Expression"
+																}
+															},
+															"DELETES": {
+																"type": "Int32",
+																"value": null
+															},
+															"DURATION_SECONDS": {
+																"type": "Int32",
+																"value": null
+															},
+															"END_TIME": {
+																"type": "DateTime",
+																"value": null
+															},
+															"ERROR_MESSAGE": {
+																"type": "String",
+																"value": null
+															},
+															"INSERTS": {
+																"type": "Int32",
+																"value": null
+															},
+															"OPERATION": {
+																"type": "String",
+																"value": "Copy Activity"
+															},
+															"PIPELINE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().Pipeline",
+																	"type": "Expression"
+																}
+															},
+															"PIPELINE_RUN_ID": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().RunId",
+																	"type": "Expression"
+																}
+															},
+															"SCHEMA_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().SCHEMA_NAME",
+																	"type": "Expression"
+																}
+															},
+															"SOURCE_SYSTEM": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+																	"type": "Expression"
+																}
+															},
+															"START_TIME": {
+																"type": "DateTime",
+																"value": {
+																	"value": "@utcnow()",
+																	"type": "Expression"
+																}
+															},
+															"TABLE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().TABLE_NAME",
+																	"type": "Expression"
+																}
+															},
+															"TARGET_SYSTEM": {
+																"type": "String",
+																"value": "ADLS_RAW"
+															},
+															"TRIGGER_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().TriggerName",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGER_TIME": {
+																"type": "DateTime",
+																"value": {
+																	"value": "@pipeline().TriggerTime",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGER_TYPE": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().TriggerType",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGERING_PIPELINE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline()?.TriggeredByPipelineName",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGERING_PIPELINE_RUN_ID": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline()?.TriggeredByPipelineRunId",
+																	"type": "Expression"
+																}
+															},
+															"UPDATES": {
+																"type": "Int32",
+																"value": null
+															}
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": false
+												}
+											},
+											{
+												"name": "update_etl_log_on_success_full_load",
+												"description": "Executes a stored procedure to update on success",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "copy_sql_to_parquet_raw_full_load",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_UpdateLog]",
+													"storedProcedureParameters": {
+														"DELETES": {
+															"value": null,
+															"type": "Int32"
+														},
+														"DURATION_SECONDS": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_full_load').output.copyDuration",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"END_TIME": {
+															"value": {
+																"value": "@utcnow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"ERROR_MESSAGE": {
+															"value": null,
+															"type": "String"
+														},
+														"LOG_ID": {
+															"value": {
+																"value": "@activity('create_log_entry_full_load').output.value[0].LOG_ID",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"INSERTS": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_full_load').output.rowsCopied",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"UPDATES": {
+															"value": null,
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "update_etl_log_on_failure_full_load",
+												"description": "Executes a stored procedure to update on failure.",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "copy_sql_to_parquet_raw_full_load",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_UpdateLog]",
+													"storedProcedureParameters": {
+														"DELETES": {
+															"value": null,
+															"type": "Int32"
+														},
+														"DURATION_SECONDS": {
+															"value": null,
+															"type": "Int32"
+														},
+														"END_TIME": {
+															"value": {
+																"value": "@utcnow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"ERROR_MESSAGE": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_full_load').output.errors[0]?.Message",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"LOG_ID": {
+															"value": {
+																"value": "@activity('create_log_entry_full_load').output.value[0].LOG_ID",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"INSERTS": {
+															"value": null,
+															"type": "Int32"
+														},
+														"UPDATES": {
+															"value": null,
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "post_table_to_storage_queue_full_load",
+												"description": "POST the table name into the Azure Storage Queue. ",
+												"type": "WebActivity",
+												"dependsOn": [
+													{
+														"activity": "update_etl_log_on_success_full_load",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"url": {
+														"value": "@concat('https://', pipeline().parameters.PARAM_QUEUE_STORAGE_ACCOUNT, '.queue.core.windows.net/', pipeline().parameters.PARAM_QUEUE_NAME, '/messages?visibilitytimeout=30&timeout=30')",
+														"type": "Expression"
+													},
+													"connectVia": {
+														"referenceName": "AutoResolveIntegrationRuntime",
+														"type": "IntegrationRuntimeReference"
+													},
+													"method": "POST",
+													"headers": {
+														"x-ms-version": "2021-04-10",
+														"x-ms-date": {
+															"value": "@formatDateTime(utcnow(),'r')",
+															"type": "Expression"
+														}
+													},
+													"body": {
+														"value": "@concat('<QueueMessage><MessageText>', item().TABLE_NAME, '</MessageText></QueueMessage>')",
+														"type": "Expression"
+													},
+													"authentication": {
+														"type": "MSI",
+														"resource": "https://storage.azure.com/"
+													}
+												}
+											}
+										]
+									},
+									{
+										"value": "CHANGE_TRACKING",
+										"activities": [
+											{
+												"name": "lookup_new_change_tracking_value",
+												"type": "Lookup",
+												"dependsOn": [],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlServerSource",
+														"sqlReaderQuery": "SELECT CHANGE_TRACKING_CURRENT_VERSION() AS NEW_CHANGE_TRACKING_VALUE",
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_sql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@item().SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "NA",
+															"TABLE_NAME": "NA"
+														}
+													}
+												}
+											},
+											{
+												"name": "copy_sql_to_parquet_raw_change_tracking",
+												"description": "Copy activity that takes SQL server tables and writes them as Parquet in the RAW hierarchical namespace within ADLS.",
+												"type": "Copy",
+												"dependsOn": [
+													{
+														"activity": "create_log_entry_change_tracking",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "SqlServerSource",
+														"sqlReaderQuery": {
+															"value": "SELECT @{item().COLUMNS_META}\n    ,S.@{item().PRIMARY_KEYS} AS PK_VALUE\n    ,'I' as SYS_CHANGE_OPERATION\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\n",
+															"type": "Expression"
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"sink": {
+														"type": "ParquetSink",
+														"storeSettings": {
+															"type": "AzureBlobFSWriteSettings"
+														},
+														"formatSettings": {
+															"type": "ParquetWriteSettings"
+														}
+													},
+													"enableStaging": false,
+													"translator": {
+														"type": "TabularTranslator",
+														"typeConversion": true,
+														"typeConversionSettings": {
+															"allowDataTruncation": true,
+															"treatBooleanAsNumber": false
+														}
+													}
+												},
+												"inputs": [
+													{
+														"referenceName": "sdlh_sql_db_table",
+														"type": "DatasetReference",
+														"parameters": {
+															"SOURCE_CONNECTION_STRING": {
+																"value": "@item().SOURCE_CONNECTION_STRING",
+																"type": "Expression"
+															},
+															"SCHEMA_NAME": "NA",
+															"TABLE_NAME": "NA"
+														}
+													}
+												],
+												"outputs": [
+													{
+														"referenceName": "sdlh_gen2_parquet_snappy",
+														"type": "DatasetReference",
+														"parameters": {
+															"FP0": {
+																"value": "@json(activity('lookup_object_metadata_full_load').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+																"type": "Expression"
+															},
+															"FP1": {
+																"value": "@concat(json(activity('lookup_object_metadata_full_load').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_full_load').output.firstRow.HNS)",
+																"type": "Expression"
+															},
+															"OBJECT_NAME": {
+																"value": "@json(activity('lookup_object_metadata_full_load').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+																"type": "Expression"
+															}
+														}
+													}
+												]
+											},
+											{
+												"name": "update_etl_log_on_success_incremental_load",
+												"description": "Executes a stored procedure to update on success",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "copy_sql_to_parquet_raw_change_tracking",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_UpdateLog]",
+													"storedProcedureParameters": {
+														"DELETES": {
+															"value": null,
+															"type": "Int32"
+														},
+														"DURATION_SECONDS": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_change_tracking').output.copyDuration",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"END_TIME": {
+															"value": {
+																"value": "@utcnow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"ERROR_MESSAGE": {
+															"value": null,
+															"type": "String"
+														},
+														"LOG_ID": {
+															"value": {
+																"value": "@activity('create_log_entry_change_tracking').output.value[0].LOG_ID",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"INSERTS": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_change_tracking').output.rowsCopied",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"UPDATES": {
+															"value": null,
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "update_etl_log_on_failure_incremental_load",
+												"description": "Executes a stored procedure to update on failure.",
+												"type": "SqlServerStoredProcedure",
+												"dependsOn": [
+													{
+														"activity": "copy_sql_to_parquet_raw_change_tracking",
+														"dependencyConditions": [
+															"Failed"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"storedProcedureName": "[ETL].[usp_UpdateLog]",
+													"storedProcedureParameters": {
+														"DELETES": {
+															"value": null,
+															"type": "Int32"
+														},
+														"DURATION_SECONDS": {
+															"value": null,
+															"type": "Int32"
+														},
+														"END_TIME": {
+															"value": {
+																"value": "@utcnow()",
+																"type": "Expression"
+															},
+															"type": "DateTime"
+														},
+														"ERROR_MESSAGE": {
+															"value": {
+																"value": "@activity('copy_sql_to_parquet_raw_change_tracking').output.errors[0].Message",
+																"type": "Expression"
+															},
+															"type": "String"
+														},
+														"LOG_ID": {
+															"value": {
+																"value": "@activity('create_log_entry_change_tracking').output.value[0].LOG_ID",
+																"type": "Expression"
+															},
+															"type": "Int32"
+														},
+														"INSERTS": {
+															"value": null,
+															"type": "Int32"
+														},
+														"UPDATES": {
+															"value": null,
+															"type": "Int32"
+														}
+													}
+												},
+												"linkedServiceName": {
+													"referenceName": "azure_sql_data_no_param_azir",
+													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "create_log_entry_change_tracking",
+												"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+												"type": "Lookup",
+												"dependsOn": [
+													{
+														"activity": "lookup_new_change_tracking_value",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"source": {
+														"type": "AzureSqlSource",
+														"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+														"storedProcedureParameters": {
+															"COMPONENT_NAME": {
+																"type": "String",
+																"value": "copy_sql_to_raw_full_load_change_tracking_null"
+															},
+															"DATABASE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().DATABASE_NAME",
+																	"type": "Expression"
+																}
+															},
+															"DELETES": {
+																"type": "Int32",
+																"value": null
+															},
+															"DURATION_SECONDS": {
+																"type": "Int32",
+																"value": null
+															},
+															"END_TIME": {
+																"type": "DateTime",
+																"value": null
+															},
+															"ERROR_MESSAGE": {
+																"type": "String",
+																"value": null
+															},
+															"INSERTS": {
+																"type": "Int32",
+																"value": null
+															},
+															"OPERATION": {
+																"type": "String",
+																"value": "Copy Activity"
+															},
+															"PIPELINE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().Pipeline",
+																	"type": "Expression"
+																}
+															},
+															"PIPELINE_RUN_ID": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().RunId",
+																	"type": "Expression"
+																}
+															},
+															"SCHEMA_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().SCHEMA_NAME",
+																	"type": "Expression"
+																}
+															},
+															"SOURCE_SYSTEM": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+																	"type": "Expression"
+																}
+															},
+															"START_TIME": {
+																"type": "DateTime",
+																"value": {
+																	"value": "@utcnow()",
+																	"type": "Expression"
+																}
+															},
+															"TABLE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@item().TABLE_NAME",
+																	"type": "Expression"
+																}
+															},
+															"TARGET_SYSTEM": {
+																"type": "String",
+																"value": "ADLS_RAW"
+															},
+															"TRIGGER_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().TriggerName",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGER_TIME": {
+																"type": "DateTime",
+																"value": {
+																	"value": "@pipeline().TriggerTime",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGER_TYPE": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline().TriggerType",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGERING_PIPELINE_NAME": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline()?.TriggeredByPipelineName",
+																	"type": "Expression"
+																}
+															},
+															"TRIGGERING_PIPELINE_RUN_ID": {
+																"type": "String",
+																"value": {
+																	"value": "@pipeline()?.TriggeredByPipelineRunId",
+																	"type": "Expression"
+																}
+															},
+															"UPDATES": {
+																"type": "Int32",
+																"value": null
+															},
+															"INCREMENTAL_KEY_VALUE": {
+																"type": "String",
+																"value": {
+																	"value": "@activity('lookup_new_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE",
+																	"type": "Expression"
+																}
+															}
+														},
+														"queryTimeout": "02:00:00",
+														"partitionOption": "None"
+													},
+													"dataset": {
+														"referenceName": "sdlh_azuresql_db_metadata",
+														"type": "DatasetReference",
+														"parameters": {
+															"METADATA_TABLE_NAME": "NA"
+														}
+													},
+													"firstRowOnly": false
+												}
+											},
+											{
+												"name": "post_table_to_storage_queue_change_tracking",
+												"description": "POST the table name into the Azure Storage Queue. ",
+												"type": "WebActivity",
+												"dependsOn": [
+													{
+														"activity": "update_etl_log_on_success_incremental_load",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": false,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"url": {
+														"value": "@concat('https://', pipeline().parameters.PARAM_QUEUE_STORAGE_ACCOUNT, '.queue.core.windows.net/', pipeline().parameters.PARAM_QUEUE_NAME, '/messages?visibilitytimeout=30&timeout=30')",
+														"type": "Expression"
+													},
+													"connectVia": {
+														"referenceName": "AutoResolveIntegrationRuntime",
+														"type": "IntegrationRuntimeReference"
+													},
+													"method": "POST",
+													"headers": {
+														"x-ms-version": "2021-04-10",
+														"x-ms-date": {
+															"value": "@formatDateTime(utcnow(),'r')",
+															"type": "Expression"
+														}
+													},
+													"body": {
+														"value": "@concat('<QueueMessage><MessageText>', item().TABLE_NAME, '</MessageText></QueueMessage>')",
+														"type": "Expression"
+													},
+													"authentication": {
+														"type": "MSI",
+														"resource": "https://storage.azure.com/"
+													}
+												}
+											}
+										]
+									}
+								],
+								"defaultActivities": [
+									{
+										"name": "create_log_entry_no_action_required",
+										"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+												"storedProcedureParameters": {
+													"COMPONENT_NAME": {
+														"type": "String",
+														"value": "copy_sql_to_raw_full_load"
+													},
+													"DATABASE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().DATABASE_NAME",
+															"type": "Expression"
+														}
+													},
+													"DELETES": {
+														"type": "Int32",
+														"value": null
+													},
+													"DURATION_SECONDS": {
+														"type": "Int32",
+														"value": null
+													},
+													"END_TIME": {
+														"type": "DateTime",
+														"value": null
+													},
+													"ERROR_MESSAGE": {
+														"type": "String",
+														"value": null
+													},
+													"INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": null
+													},
+													"INSERTS": {
+														"type": "Int32",
+														"value": null
+													},
+													"OPERATION": {
+														"type": "String",
+														"value": "No Action Required"
+													},
+													"PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														}
+													},
+													"SCHEMA_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().SCHEMA_NAME",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_SYSTEM": {
+														"type": "String",
+														"value": {
+															"value": "@item().SOURCE_SYSTEM",
+															"type": "Expression"
+														}
+													},
+													"START_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"TABLE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().TABLE_NAME",
+															"type": "Expression"
+														}
+													},
+													"TARGET_SYSTEM": {
+														"type": "String",
+														"value": "ADLS_RAW"
+													},
+													"TRIGGER_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerName",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@pipeline().TriggerTime",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerType",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline()?.TriggeredByPipelineName",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline()?.TriggeredByPipelineRunId",
+															"type": "Expression"
+														}
+													},
+													"UPDATES": {
+														"type": "Int32",
+														"value": null
+													}
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								]
+							}
 						}
 					]
 				}
 			},
 			{
-				"name": "raw_to_staged_etl_and_external_tables",
-				"description": "This notebook performs the ETL process between Parquet Raw and Delta files in Staged based on the Storage Queue messages, with the help of metadata stored in the Metadata DB. Furthermore, using information schema from the source system, it maps the datatypes to the closest datatype that exists in Serverless SQL Pool, and creates External Tables with a very similar schema to the source tables.",
-				"type": "SynapseNotebook",
-				"dependsOn": [
-					{
-						"activity": "for_each_table_etl",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"notebook": {
-						"referenceName": "nb_lakehouse_orchestration_py",
-						"type": "NotebookReference"
-					},
-					"parameters": {
-						"PARAM_TRIGGER_NAME": {
-							"value": {
-								"value": "@pipeline().TriggerName",
-								"type": "Expression"
-							},
-							"type": "string"
-						},
-						"PARAM_TRIGGER_TIME": {
-							"value": {
-								"value": "@variables('VAR_TRIGGER_TIME')",
-								"type": "Expression"
-							},
-							"type": "string"
-						},
-						"PARAM_TRIGGER_TYPE": {
-							"value": {
-								"value": "@pipeline().TriggerType",
-								"type": "Expression"
-							},
-							"type": "string"
-						},
-						"PARAM_STORAGE_QUEUE_NAME": {
-							"value": {
-								"value": "@variables('VAR_STORAGE_QUEUE_NAME')",
-								"type": "Expression"
-							},
-							"type": "string"
-						},
-						"PARAM_PIPELINE_NAME": {
-							"value": {
-								"value": "@pipeline().Pipeline",
-								"type": "Expression"
-							},
-							"type": "string"
-						},
-						"PARAM_PIPELINE_RUN_ID": {
-							"value": {
-								"value": "@pipeline().RunId",
-								"type": "Expression"
-							},
-							"type": "string"
-						}
-					},
-					"snapshot": true,
-					"sparkPool": {
-						"referenceName": "PARAM_SPARK_POOL_NAME",
-						"type": "BigDataPoolReference"
-					},
-					"executorSize": "Small",
-					"conf": {
-						"spark.dynamicAllocation.enabled": false,
-						"spark.dynamicAllocation.minExecutors": 2,
-						"spark.dynamicAllocation.maxExecutors": 2
-					},
-					"driverSize": "Small",
-					"numExecutors": 2
-				}
-			},
-			{
-				"name": "retrieve_batch_metadata",
+				"name": "lookup_tables_full_load",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is FULL_LOAD or CHANGE_TRACKING where LAST_CHANGE_TRACKING_VALUE IS NULL",
 				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "set_trigger_time",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
+				"dependsOn": [],
 				"policy": {
 					"timeout": "0.12:00:00",
 					"retry": 0,
@@ -619,35 +1184,15 @@
 				"typeProperties": {
 					"source": {
 						"type": "AzureSqlSource",
-						"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineTriggerMetadata]",
-						"storedProcedureParameters": {
-							"PIPELINE_NAME": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								}
-							},
-							"PIPELINE_TRIGGER_NAME": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().TriggerName",
-									"type": "Expression"
-								}
-							},
-							"PIPELINE_CURRENT_DATETIME": {
-								"type": "DateTime",
-								"value": {
-									"value": "@variables('VAR_TRIGGER_TIME')",
-									"type": "Expression"
-								}
-							}
+						"sqlReaderQuery": {
+							"value": "SELECT [LOAD_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n    ,[PRIMARY_KEYS]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND ( [LOAD_TYPE] = 'FULL_LOAD' OR ( [LOAD_TYPE] = 'CHANGE_TRACKING' AND [LAST_CHANGE_TRACKING_VALUE] IS NULL) )",
+							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "sdlh_azsql_db_metadata",
+						"referenceName": "sdlh_azuresql_db_metadata",
 						"type": "DatasetReference",
 						"parameters": {
 							"METADATA_TABLE_NAME": "NA"
@@ -655,224 +1200,30 @@
 					},
 					"firstRowOnly": false
 				}
-			},
-			{
-				"name": "create_storage_queue",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "set_storage_queue_name",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
-						"type": "Expression"
-					},
-					"connectVia": {
-						"referenceName": "AutoResolveIntegrationRuntime",
-						"type": "IntegrationRuntimeReference"
-					},
-					"method": "PUT",
-					"headers": {
-						"x-ms-date": {
-							"value": "@formatDateTime(utcnow(),'r')",
-							"type": "Expression"
-						},
-						"x-ms-version": "2021-04-10"
-					},
-					"body": "NA",
-					"authentication": {
-						"type": "MSI",
-						"resource": "https://storage.azure.com/"
-					}
-				}
-			},
-			{
-				"name": "delete_storage_queue",
-				"type": "WebActivity",
-				"dependsOn": [
-					{
-						"activity": "raw_to_staged_etl_and_external_tables",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"url": {
-						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_STORAGE_QUEUE_NAME'))",
-						"type": "Expression"
-					},
-					"connectVia": {
-						"referenceName": "AutoResolveIntegrationRuntime",
-						"type": "IntegrationRuntimeReference"
-					},
-					"method": "DELETE",
-					"headers": {
-						"x-ms-date": {
-							"value": "@formatDateTime(utcnow(),'r')",
-							"type": "Expression"
-						},
-						"x-ms-version": "2021-04-10"
-					},
-					"body": "NA",
-					"authentication": {
-						"type": "MSI",
-						"resource": "https://storage.azure.com/"
-					}
-				}
-			},
-			{
-				"name": "run_pipeline_concurrency_check",
-				"type": "ExecutePipeline",
-				"dependsOn": [],
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "gen_pipeline_concurrency_check",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true,
-					"parameters": {
-						"PIPELINE_NAME": {
-							"value": "@pipeline().Pipeline",
-							"type": "Expression"
-						},
-						"TRIGGER_NAME": {
-							"value": "@pipeline().TriggerName",
-							"type": "Expression"
-						}
-					}
-				}
-			},
-			{
-				"name": "lookup_pipeline_parameters",
-				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
-				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "run_pipeline_concurrency_check",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.00:10:00",
-					"retry": 3,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"source": {
-						"type": "SqlDWSource",
-						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
-						"storedProcedureParameters": {
-							"Workspace": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().DataFactory",
-									"type": "Expression"
-								}
-							}
-						},
-						"queryTimeout": "02:00:00",
-						"partitionOption": "None"
-					},
-					"dataset": {
-						"referenceName": "serverless_metadata",
-						"type": "DatasetReference"
-					},
-					"firstRowOnly": true
-				}
-			},
-			{
-				"name": "set_storage_queue_name",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "lookup_pipeline_parameters",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "VAR_STORAGE_QUEUE_NAME",
-					"value": {
-						"value": "@concat('etl-queue-',pipeline().RunId)",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "set_trigger_time",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "run_pipeline_concurrency_check",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "VAR_TRIGGER_TIME",
-					"value": {
-						"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
-						"type": "Expression"
-					}
-				}
 			}
 		],
 		"parameters": {
-			"PARAM_LOAD_TYPE": {
-				"type": "string",
-				"defaultValue": "FULL_LOAD"
-			}
-		},
-		"variables": {
-			"VAR_TRIGGER_TIME": {
-				"type": "String"
+			"PARAM_SOURCE_TYPE": {
+				"type": "string"
 			},
-			"VAR_STORAGE_QUEUE_NAME": {
-				"type": "String"
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int"
+			},
+			"PARAM_QUEUE_STORAGE_ACCOUNT": {
+				"type": "string"
+			},
+			"PARAM_QUEUE_NAME": {
+				"type": "string"
+			},
+			"PARAM_DATETIME": {
+				"type": "string"
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL"
+			"name": "SDLH/SQL_Server/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

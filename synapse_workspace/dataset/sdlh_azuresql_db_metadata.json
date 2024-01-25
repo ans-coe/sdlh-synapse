@@ -1,8 +1,8 @@
 {
-	"name": "sdlh_azsql_db_metadata",
+	"name": "sdlh_azuresql_db_metadata",
 	"properties": {
 		"linkedServiceName": {
-			"referenceName": "azure_sql_sdlh_azir",
+			"referenceName": "azure_sql_data_no_param_azir",
 			"type": "LinkedServiceReference"
 		},
 		"parameters": {

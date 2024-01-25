@@ -1,13 +1,13 @@
 {
-	"name": "postgresql_sdlh_shir",
+	"name": "azure_sqlmi_sdlh_azir",
 	"properties": {
 		"parameters": {
-			"CONNECTION_STRING_SECRET_NAME": {
+			"SOURCE_SYSTEM_CONNECTION_STRING": {
 				"type": "string"
 			}
 		},
 		"annotations": [],
-		"type": "PostgreSql",
+		"type": "AzureSqlMI",
 		"typeProperties": {
 			"connectionString": {
 				"type": "AzureKeyVaultSecret",
@@ -16,16 +16,15 @@
 					"type": "LinkedServiceReference"
 				},
 				"secretName": {
-					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
+					"value": "@linkedService().SOURCE_SYSTEM_CONNECTION_STRING",
 					"type": "Expression"
 				}
 			}
 		},
 		"connectVia": {
-			"referenceName": "shir-dcoe-data-uksouth-002",
+			"referenceName": "AutoResolveIntegrationRuntime",
 			"type": "IntegrationRuntimeReference"
 		},
 		"description": "Added as part of ANS SDLH deployment"
-	},
-	"type": "Microsoft.Synapse/workspaces/linkedservices"
+	}
 }

@@ -4,11 +4,11 @@
 		"activities": [
 			{
 				"name": "for_each_table_metadata",
-				"description": "This for loop iterates through the each TABLE_NAME from ETL.SourceTable. Using the table name, it is able to grab the relevant metadata, and construct the query to retrieve the source data.",
+				"description": "This for loop iterates through the each required item and loads required metadata into the Metadata DB.  Tables included are ETL.SQLTableMetadata & ETL.SQLColumnMetadata & ETL.JsonMetadata",
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "truncate_etl_meta_and_columns",
+						"activity": "lookup_sql_etl_metadata",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -17,17 +17,23 @@
 				"userProperties": [],
 				"typeProperties": {
 					"items": {
-						"value": "@activity('etl_metadata_sql_server_objects').output.value",
+						"value": "@activity('lookup_sql_etl_metadata').output.value",
 						"type": "Expression"
 					},
 					"activities": [
 						{
-							"name": "initialize_etl_sql_incremental_load",
-							"description": "This table checks if the current table exists in the SourceIncrementalLoad table. If it exists, nothing will happen. If it doesn't exist, the stored procedure run will insert a row for it, with the default SYS_CHANGE_VERSION= '0'.",
-							"type": "SqlServerStoredProcedure",
+							"name": "sql_etl_tables",
+							"description": "Writes required config to ETL.SQLTableMetadata",
+							"type": "Copy",
 							"dependsOn": [
 								{
-									"activity": "update_etl_columns",
+									"activity": "lookup_new_columns",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								},
+								{
+									"activity": "lookup_current_columns",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -42,75 +48,150 @@
 							},
 							"userProperties": [],
 							"typeProperties": {
-								"storedProcedureName": "[ETL].[usp_InitializeIncrementalLoad]",
-								"storedProcedureParameters": {
-									"DATABASE_NAME": {
-										"value": {
-											"value": "@item().DATABASE_NAME",
-											"type": "Expression"
-										},
-										"type": "String"
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
+										"type": "Expression"
 									},
-									"INCREMENTAL_LOAD_TYPE": {
-										"value": {
-											"value": "@item().LOAD_TYPE",
-											"type": "Expression"
-										},
-										"type": "String"
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "upsert",
+									"upsertSettings": {
+										"useTempDB": true,
+										"keys": [
+											"SOURCE_TYPE",
+											"SOURCE_SYSTEM",
+											"DATABASE_NAME",
+											"SCHEMA_NAME",
+											"TABLE_NAME"
+										]
 									},
-									"SCHEMA_NAME": {
-										"value": {
-											"value": "@item().TABLE_SCHEMA",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"SOURCE_SYSTEM": {
-										"value": {
-											"value": "@item().SOURCE_SYSTEM",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"SYS_CHANGE_VERSION_VALUE": {
-										"value": {
-											"value": "@if(equals(item().LOAD_TYPE, 'CHANGE_TRACKING'), '0', 'NULL')",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"TABLE_NAME": {
-										"value": {
-											"value": "@item().TABLE_NAME",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"WATERMARK_FIELD": {
-										"value": {
-											"value": "@if(equals(item().LOAD_TYPE, 'HIGH_WATERMARK'), item().WATERMARK_FIELD, 'NULL')",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"WATERMARK_VALUE": {
-										"value": {
-											"value": "@if(equals(item().LOAD_TYPE, 'HIGH_WATERMARK'), '1900-01-01 00:00:00', 'NULL' )",
-											"type": "Expression"
-										},
-										"type": "String"
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
 									}
 								}
 							},
-							"linkedServiceName": {
-								"referenceName": "azure_sql_sdlh_azir",
-								"type": "LinkedServiceReference"
-							}
+							"inputs": [
+								{
+									"referenceName": "sdlh_sql_db_table",
+									"type": "DatasetReference",
+									"parameters": {
+										"SOURCE_CONNECTION_STRING": {
+											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "SQLTableMetadata"
+									}
+								}
+							]
 						},
 						{
-							"name": "update_etl_tables",
-							"description": "Queries the source SQL Server metadata regarding the required tables, and writes them in the ETL.SourceTable",
+							"name": "sql_etl_columns",
+							"description": "Writes required config to ETL.SQLColumnMetadata",
 							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' ) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_SCHEMA AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "AzureSqlSink",
+									"writeBehavior": "upsert",
+									"upsertSettings": {
+										"useTempDB": true,
+										"keys": [
+											"SOURCE_TYPE",
+											"SOURCE_SYSTEM",
+											"DATABASE_NAME",
+											"SCHEMA_NAME",
+											"TABLE_NAME",
+											"COLUMN_NAME"
+										]
+									},
+									"sqlWriterUseTableLock": false,
+									"disableMetricsCollection": false
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": true
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "sdlh_sql_db_table",
+									"type": "DatasetReference",
+									"parameters": {
+										"SOURCE_CONNECTION_STRING": {
+											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "SQLColumnMetadata"
+									}
+								}
+							]
+						},
+						{
+							"name": "lookup_new_columns",
+							"description": "Retrieves latest Table Column config from the source systems INFORMATION_SCHEMA to be used within the loop.",
+							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
 								"timeout": "0.12:00:00",
@@ -124,60 +205,131 @@
 								"source": {
 									"type": "SqlServerSource",
 									"sqlReaderQuery": {
-										"value": "WITH CTE_ALIAS AS (\nselect *,\n    case\n    WHEN COLUMN_NAME  LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '') \n    WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n    ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_') \n    END as 'COLUMN_ALIAS'\n\n\nfrom INFORMATION_SCHEMA.COLUMNS),\ncte_col_with_alias as (\nSELECT *, \n    CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS\n),\ncte_cols_meta as ( \nSELECT\nTABLE_NAME,\nSTUFF((\nSELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\nFROM cte_col_with_alias AS innerTable\nWHERE innerTable.TABLE_NAME = p.TABLE_NAME\nFOR XML PATH('')\n),1,1,'') AS COLUMNS_META,\nSTUFF((\nSELECT ',' + CAST(COLUMN_NAME AS varchar(max))\nFROM cte_col_with_alias AS innerTable\nWHERE innerTable.TABLE_NAME = p.TABLE_NAME\nFOR XML PATH('')\n),1,1,'') AS COLUMNS_LIST\nFROM\ncte_col_with_alias AS p\nGROUP BY\np.TABLE_NAME)\n\n\nselect \n    '@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM,\n    '@{item().DATABASE_NAME}' as DATABASE_NAME,\n    '@{item().TABLE_SCHEMA}' as 'SCHEMA_NAME',\n    '@{item().TABLE_NAME}'  as 'TABLE_NAME',\n    '@{item().PRIMARY_KEYS}' as 'PRIMARY_KEYS',\n    '@{item().SOURCE_SYS_CONNECTION_STRING}' as SOURCE_SYSTEM_CONNECTION_STRING,                           \n                \n    cte_cols_meta.COLUMNS_META,\n    cte_cols_meta.COLUMNS_LIST,\n    '@{item().LOAD_TYPE}' as LOAD_TYPE,\n    '@{item().OBJECT_TYPE}' AS OBJECT_TYPE,\n    '@{item().BATCH_FREQUENCY}' as BATCH_FREQUENCY,\n    '@{item().SERVERLESS_SQL_POOL_DATABASE}' as SERVERLESS_SQL_POOL_DATABASE,\n    '@{item().SERVERLESS_SQL_POOL_SCHEMA}' as SERVERLESS_SQL_POOL_SCHEMA\n\n\nfrom cte_cols_meta, INFORMATION_SCHEMA.TABLES\nwhere INFORMATION_SCHEMA.TABLES.TABLE_NAME = cte_cols_meta.TABLE_NAME  and\n INFORMATION_SCHEMA.TABLES.TABLE_NAME = '@{item().TABLE_NAME}'",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' )),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_META\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_LIST\n    ,STUFF((\n\t\tSELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n\t\t),1,0,'') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
 									"partitionOption": "None"
 								},
-								"sink": {
-									"type": "AzureSqlSink",
-									"writeBehavior": "insert",
-									"sqlWriterUseTableLock": false
-								},
-								"enableStaging": false,
-								"translator": {
-									"type": "TabularTranslator",
-									"typeConversion": true,
-									"typeConversionSettings": {
-										"allowDataTruncation": true,
-										"treatBooleanAsNumber": false
-									}
-								}
-							},
-							"inputs": [
-								{
+								"dataset": {
 									"referenceName": "sdlh_sql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SOURCE_SYSTEM": "NA",
-										"DATABASE_NAME": "NA",
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA",
-										"SOURCE_SYSTEM_CONNECTION_STRING": {
-											"value": "@item().SOURCE_SYS_CONNECTION_STRING",
+										"SOURCE_CONNECTION_STRING": {
+											"value": "@item().SOURCE_CONNECTION_STRING",
 											"type": "Expression"
 										},
-										"COLUMNS_META": "NA"
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
 									}
 								}
-							],
-							"outputs": [
-								{
-									"referenceName": "sdlh_azsql_db_metadata",
-									"type": "DatasetReference",
-									"parameters": {
-										"METADATA_TABLE_NAME": "SourceTable"
-									}
-								}
-							]
+							}
 						},
 						{
-							"name": "update_etl_columns",
-							"type": "Copy",
+							"name": "generate_schema_version",
+							"description": "Executes a stored procedure which completes any update to the SCHEMA_VERSION column in the table ETL.SQLTableMetadata",
+							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "update_etl_tables",
+									"activity": "sql_etl_columns",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_SQLGenerateSchemaVersion]",
+								"storedProcedureParameters": {
+									"PARAM_CHECK_INFORMATION_SCHEMA": {
+										"value": {
+											"value": "@activity('lookup_current_columns').output.firstRow.INFORMATION_SCHEMA",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_DATABASE_NAME": {
+										"value": {
+											"value": "@item().DATABASE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SCHEMA_NAME": {
+										"value": {
+											"value": "@item().SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": {
+											"value": "@item().SOURCE_SYSTEM",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_TABLE_NAME": {
+										"value": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "lookup_current_columns",
+							"description": "Retrieves current Table Column config from the Metadata DB be used within the loop to compare with new Table Column config. ( MAX is used as a workaround for first load when there is no current config.  It returns as NULL instead of nothing )",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "create_log_entry_generate_sql_tables",
+							"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_tables",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -193,63 +345,335 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
-									"sqlReaderQuery": {
-										"value": "SELECT\n    TABLE_SCHEMA as SCHEMA_NAME\n    ,TABLE_NAME\n    , COLUMN_NAME\n    , COLUMN_DEFAULT\n    , IS_NULLABLE\n    , DATA_TYPE\n    , CHARACTER_MAXIMUM_LENGTH\n    , COLLATION_NAME\n\nFROM INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = '@{item().TABLE_NAME}'",
-										"type": "Expression"
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "sql_generate_metadata_tables"
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().SCHEMA_NAME",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().TABLE_NAME",
+												"type": "Expression"
+											}
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"TRIGGER_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerName",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineRunId",
+												"type": "Expression"
+											}
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										}
 									},
 									"queryTimeout": "02:00:00",
 									"partitionOption": "None"
 								},
-								"sink": {
-									"type": "AzureSqlSink",
-									"writeBehavior": "insert",
-									"sqlWriterUseTableLock": false
-								},
-								"enableStaging": false,
-								"translator": {
-									"type": "TabularTranslator",
-									"typeConversion": true,
-									"typeConversionSettings": {
-										"allowDataTruncation": true,
-										"treatBooleanAsNumber": false
-									}
-								}
-							},
-							"inputs": [
-								{
-									"referenceName": "sdlh_sql_db_table",
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
 									"type": "DatasetReference",
 									"parameters": {
-										"SOURCE_SYSTEM": "NA",
-										"DATABASE_NAME": "NA",
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA",
-										"SOURCE_SYSTEM_CONNECTION_STRING": {
-											"value": "@item().SOURCE_SYS_CONNECTION_STRING",
-											"type": "Expression"
-										},
-										"COLUMNS_META": "NA"
+										"METADATA_TABLE_NAME": "NA"
 									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "create_log_entry_generate_sql_columns",
+							"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_columns",
+									"dependencyConditions": [
+										"Succeeded"
+									]
 								}
 							],
-							"outputs": [
-								{
-									"referenceName": "sdlh_azsql_db_metadata",
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "sql_generate_metadata_columns"
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_columns').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_columns').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().SCHEMA_NAME",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().TABLE_NAME",
+												"type": "Expression"
+											}
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"TRIGGER_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerName",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineRunId",
+												"type": "Expression"
+											}
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
 									"type": "DatasetReference",
 									"parameters": {
-										"METADATA_TABLE_NAME": "SourceColumn"
+										"METADATA_TABLE_NAME": "NA"
 									}
-								}
-							]
+								},
+								"firstRowOnly": false
+							}
 						}
 					]
 				}
 			},
 			{
-				"name": "lookup_etl_metadata_form",
+				"name": "lookup_sql_etl_metadata",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_TYPE & SOURCE_SYSTEM",
 				"type": "Lookup",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "sdlh_base_generate_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.12:00:00",
 					"retry": 0,
@@ -260,143 +684,27 @@
 				"userProperties": [],
 				"typeProperties": {
 					"source": {
-						"type": "DelimitedTextSource",
-						"storeSettings": {
-							"type": "AzureBlobFSReadSettings",
-							"recursive": false,
-							"enablePartitionDiscovery": false
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT * FROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'",
+							"type": "Expression"
 						},
-						"formatSettings": {
-							"type": "DelimitedTextReadSettings"
-						}
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "sdlh_gen2_csv_comma",
+						"referenceName": "sdlh_azuresql_db_metadata",
 						"type": "DatasetReference",
 						"parameters": {
-							"FILE_SYSTEM": "metadata",
-							"DIRECTORY": "sdlh_metadata_form",
-							"FILE_NAME": "metadata_form.csv"
+							"METADATA_TABLE_NAME": "BaseMetadata"
 						}
 					},
 					"firstRowOnly": false
 				}
 			},
 			{
-				"name": "initialize_etl_json_meta",
-				"type": "SqlServerStoredProcedure",
-				"dependsOn": [
-					{
-						"activity": "initialize_schema_versions",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"storedProcedureName": "[ETL].[usp_InitializeOrUpdateJsonMeta]",
-					"storedProcedureParameters": {
-						"PARAM_JSON_TRIGGER": {
-							"value": {
-								"value": "@string(pipeline().parameters.PARAM_JSON_TRIGGER)",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"PARAM_OBJECT_TYPE": {
-							"value": {
-								"value": "@pipeline().parameters.PARAM_OBJECT_TYPE",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"PARAM_PIPELINE_NAME": {
-							"value": {
-								"value": "@pipeline().parameters.PARAM_PIPELINE_NAME",
-								"type": "Expression"
-							},
-							"type": "String"
-						},
-						"VAR_PIPELINE_CURRENT_DATETIME": {
-							"value": {
-								"value": "@variables('VAR_PIPELINE_CURRENT_DATETIME')",
-								"type": "Expression"
-							},
-							"type": "DateTime"
-						}
-					}
-				},
-				"linkedServiceName": {
-					"referenceName": "azure_sql_sdlh_azir",
-					"type": "LinkedServiceReference"
-				}
-			},
-			{
-				"name": "truncate_etl_meta_and_columns",
-				"type": "SqlServerStoredProcedure",
-				"dependsOn": [
-					{
-						"activity": "etl_metadata_sql_server_objects",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"storedProcedureName": "[ETL].[usp_TruncateMetaAndColumns]"
-				},
-				"linkedServiceName": {
-					"referenceName": "azure_sql_sdlh_azir",
-					"type": "LinkedServiceReference"
-				}
-			},
-			{
-				"name": "etl_metadata_sql_server_objects",
-				"type": "Filter",
-				"dependsOn": [
-					{
-						"activity": "lookup_etl_metadata_form",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
-						"activity": "set_current_datetime",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"items": {
-						"value": "@activity('lookup_etl_metadata_form').output.value",
-						"type": "Expression"
-					},
-					"condition": {
-						"value": "@equals(item().OBJECT_TYPE, 'SQL_SERVER')",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "initialize_schema_versions",
+				"name": "generate_json_metadata",
+				"description": "Executes a stored procedure which checks if any updates are required to table ETL.JsonMetadata",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
 					{
@@ -415,68 +723,57 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"storedProcedureName": "[ETL].[usp_InitializeVersion]"
+					"storedProcedureName": "[ETL].[usp_SQLGenerateJsonMetadata]",
+					"storedProcedureParameters": {
+						"PARAM_SOURCE_SYSTEM": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_SOURCE_TYPE": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
 				},
 				"linkedServiceName": {
-					"referenceName": "azure_sql_sdlh_azir",
+					"referenceName": "azure_sql_data_no_param_azir",
 					"type": "LinkedServiceReference"
 				}
 			},
 			{
-				"name": "set_current_datetime",
-				"type": "SetVariable",
+				"name": "sdlh_base_generate_metadata",
+				"type": "ExecutePipeline",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
 				"userProperties": [],
 				"typeProperties": {
-					"variableName": "VAR_PIPELINE_CURRENT_DATETIME",
-					"value": {
-						"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
-						"type": "Expression"
-					}
+					"pipeline": {
+						"referenceName": "sdlh_base_generate_metadata",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
 				}
 			}
 		],
 		"concurrency": 50,
 		"parameters": {
-			"PARAM_OBJECT_TYPE": {
+			"PARAM_SOURCE_TYPE": {
 				"type": "string",
 				"defaultValue": "SQL_SERVER"
 			},
-			"PARAM_PIPELINE_NAME": {
-				"type": "string",
-				"defaultValue": "sdlh_sql_full_load"
-			},
-			"PARAM_JSON_TRIGGER": {
-				"type": "string",
-				"defaultValue": [
-					{
-						"TRIGGER_NAME": "Sandbox",
-						"TRIGGER_TYPE": "Scheduler"
-					},
-					{
-						"TRIGGER_NAME": "Manual",
-						"TRIGGER_TYPE": "Scheduler"
-					}
-				]
-			}
-		},
-		"variables": {
-			"VAR_LIST_OF_TABLES": {
-				"type": "Array"
-			},
-			"VAR_LIST_OF_COLUMNS": {
-				"type": "Array"
-			},
-			"VAR_PIPELINE_CURRENT_DATETIME": {
-				"type": "String"
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL"
+			"name": "SDLH/SQL_Server"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-07-25T15:14:09Z"
