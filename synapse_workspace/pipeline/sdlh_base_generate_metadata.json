@@ -1,0 +1,234 @@
+{
+	"name": "sdlh_base_generate_metadata",
+	"properties": {
+		"description": "Pipeline to copy metadata_form.csv from datalake metadata/sdlh_metadata_form/ to Metadata Azure SQL DB Table ETL.BaseMetadata",
+		"activities": [
+			{
+				"name": "load_etl_base_metadata",
+				"description": "Copy metadata_form.csv from datalake metadata/sdlh_metadata_form/ to Metadata Azure SQL DB Table ETL.BaseMetadata",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "TRUNCATE TABLE ETL.BaseMetadata",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": true
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "sdlh_gen2_csv_comma",
+						"type": "DatasetReference",
+						"parameters": {
+							"FILE_SYSTEM": "metadata",
+							"DIRECTORY": "sdlh_metadata_form",
+							"FILE_NAME": "metadata_form.csv"
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "BaseMetadata"
+						}
+					}
+				]
+			},
+			{
+				"name": "create_log_entry_generate_base_tables",
+				"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "load_etl_base_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+						"storedProcedureParameters": {
+							"COMPONENT_NAME": {
+								"type": "String",
+								"value": "base_generate_metadata"
+							},
+							"DATABASE_NAME": {
+								"type": "String",
+								"value": null
+							},
+							"DELETES": {
+								"type": "Int32",
+								"value": null
+							},
+							"DURATION_SECONDS": {
+								"type": "Int32",
+								"value": {
+									"value": "@activity('load_etl_base_metadata').output.copyDuration",
+									"type": "Expression"
+								}
+							},
+							"END_TIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@utcnow()",
+									"type": "Expression"
+								}
+							},
+							"ERROR_MESSAGE": {
+								"type": "String",
+								"value": null
+							},
+							"INSERTS": {
+								"type": "Int32",
+								"value": {
+									"value": "@activity('load_etl_base_metadata').output.rowsCopied",
+									"type": "Expression"
+								}
+							},
+							"OPERATION": {
+								"type": "String",
+								"value": "Copy Activity"
+							},
+							"PIPELINE_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								}
+							},
+							"PIPELINE_RUN_ID": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							},
+							"SCHEMA_NAME": {
+								"type": "String",
+								"value": null
+							},
+							"SOURCE_SYSTEM": {
+								"type": "String",
+								"value": null
+							},
+							"START_TIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@utcnow()",
+									"type": "Expression"
+								}
+							},
+							"TABLE_NAME": {
+								"type": "String",
+								"value": null
+							},
+							"TARGET_SYSTEM": {
+								"type": "String",
+								"value": "Metadata DB"
+							},
+							"TRIGGER_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().TriggerName",
+									"type": "Expression"
+								}
+							},
+							"TRIGGER_TIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@pipeline().TriggerTime",
+									"type": "Expression"
+								}
+							},
+							"TRIGGER_TYPE": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().TriggerType",
+									"type": "Expression"
+								}
+							},
+							"TRIGGERING_PIPELINE_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline()?.TriggeredByPipelineName",
+									"type": "Expression"
+								}
+							},
+							"TRIGGERING_PIPELINE_RUN_ID": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline()?.TriggeredByPipelineRunId",
+									"type": "Expression"
+								}
+							},
+							"UPDATES": {
+								"type": "Int32",
+								"value": null
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"concurrency": 50,
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-07-25T15:14:09Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

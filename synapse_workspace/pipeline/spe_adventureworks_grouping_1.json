@@ -1,0 +1,94 @@
+{
+	"name": "spe_adventureworks_grouping_1",
+	"properties": {
+		"activities": [
+			{
+				"name": "sdlh_sql_load",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_sql_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+							"type": "Expression"
+						},
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "run_pipeline_concurrency_check",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_pipeline_concurrency_check",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_PIPELINE_NAME": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"PARAM_PIPELINE_RUN_ID": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"PARAM_TRIGGER_NAME": {
+							"value": "@pipeline().TriggerName",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "SQL_SERVER"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string",
+				"defaultValue": "AdventureWorks"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"PARAM_DEPLOY_ENRICHED_LAYER": {
+				"type": "bool",
+				"defaultValue": true
+			}
+		},
+		"folder": {
+			"name": "SDLH/_Example_Usage"
+		},
+		"annotations": []
+	}
+}

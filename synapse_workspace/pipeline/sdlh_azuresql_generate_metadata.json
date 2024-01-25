@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_postgresql_generate_metadata",
+	"name": "sdlh_azuresql_generate_metadata",
 	"properties": {
 		"activities": [
 			{
@@ -49,11 +49,13 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "PostgreSqlSource",
-									"query": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS \"SOURCE_TYPE\",\r\n    '@{item().SOURCE_SYSTEM}' AS \"SOURCE_SYSTEM\",\r\n    @{item().SOURCE_GROUPING_ID} AS \"SOURCE_GROUPING_ID\",\r\n    '@{item().IS_ENABLED}' AS \"IS_ENABLED\",\r\n    '@{item().LOAD_TYPE}' AS \"LOAD_TYPE\",\r\n    '@{item().BATCH_FREQUENCY}' AS \"BATCH_FREQUENCY\",\r\n    '@{item().SOURCE_CONNECTION_STRING}' AS \"SOURCE_CONNECTION_STRING\",\r\n    '@{item().DATABASE_NAME}' AS \"DATABASE_NAME\",\r\n    '@{item().SCHEMA_NAME}' AS \"SCHEMA_NAME\",\r\n    '@{item().TABLE_NAME}' AS \"TABLE_NAME\",\r\n    '@{item().PRIMARY_KEYS}' AS \"PRIMARY_KEYS\",\r\n    '@{item().WATERMARK_COLUMN}' AS \"WATERMARK_COLUMN\",\r\n    '@{item().SERVERLESS_SQL_POOL_DATABASE}' AS \"SERVERLESS_SQL_POOL_DATABASE\",\r\n    '@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS \"SERVERLESS_SQL_POOL_SCHEMA\",\r\n    '@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS \"COLUMNS_LIST\",\r\n    '@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS \"COLUMNS_META\",\r\n    '@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS \"INFORMATION_SCHEMA\"",
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
 										"type": "Expression"
-									}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "AzureSqlSink",
@@ -83,15 +85,15 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_postgresql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA",
 										"SOURCE_CONNECTION_STRING": {
 											"value": "@item().SOURCE_CONNECTION_STRING",
 											"type": "Expression"
-										}
+										},
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
 									}
 								}
 							],
@@ -127,11 +129,13 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "PostgreSqlSource",
-									"query": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS \"SOURCE_TYPE\"\r\n    ,'@{item().SOURCE_SYSTEM}' AS \"SOURCE_SYSTEM\"\r\n    ,CASE\r\n        WHEN COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' ) THEN 1\r\n        ELSE 0\r\n    END AS \"IS_ENABLED\"\r\n    ,'@{item().DATABASE_NAME}' AS \"DATABASE_NAME\"\r\n    ,TABLE_SCHEMA AS \"SCHEMA_NAME\"\r\n    ,TABLE_NAME AS \"TABLE_NAME\"\r\n    ,COLUMN_NAME AS \"COLUMN_NAME\"\r\n    ,COLUMN_DEFAULT AS \"COLUMN_DEFAULT\"\r\n    ,IS_NULLABLE AS \"IS_NULLABLE\"\r\n    ,CASE\r\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\r\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\r\n        ELSE DATA_TYPE\r\n    END AS \"DATA_TYPE\"\r\n    ,CHARACTER_MAXIMUM_LENGTH AS \"CHARACTER_MAXIMUM_LENGTH\"\r\n    ,COLLATION_NAME AS \"COLLATION_NAME\"\r\nFROM INFORMATION_SCHEMA.COLUMNS\r\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'",
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' ) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_SCHEMA AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'",
 										"type": "Expression"
-									}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
 								},
 								"sink": {
 									"type": "AzureSqlSink",
@@ -162,7 +166,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_postgresql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SOURCE_CONNECTION_STRING": {
@@ -199,22 +203,24 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "PostgreSqlSource",
-									"query": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' )),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.',COLUMN_NAME,'', ' AS ' , COLUMN_ALIAS) AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,STRING_AGG(CAST(COLUMN_WITH_ALIAS AS text), ',' ORDER BY COLUMN_NAME) AS COLUMNS_META\n    ,STRING_AGG(CAST(COLUMN_NAME AS text), ',' ORDER BY COLUMN_NAME) AS COLUMNS_LIST\n    ,(SELECT json_agg(row_to_json(columns))\n    FROM (SELECT COLUMN_NAME, DATA_TYPE ,CHARACTER_MAXIMUM_LENGTH\n          FROM cte_col_with_alias) AS columns) AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' )),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_META\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_LIST\n    ,(SELECT COLUMN_NAME\n        ,DATA_TYPE\n        ,CHARACTER_MAXIMUM_LENGTH\n    FROM cte_col_with_alias\n    FOR JSON PATH) AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p",
 										"type": "Expression"
-									}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
 								},
 								"dataset": {
-									"referenceName": "sdlh_postgresql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA",
 										"SOURCE_CONNECTION_STRING": {
 											"value": "@item().SOURCE_CONNECTION_STRING",
 											"type": "Expression"
-										}
+										},
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
 									}
 								}
 							}
@@ -344,7 +350,7 @@
 									"storedProcedureParameters": {
 										"COMPONENT_NAME": {
 											"type": "String",
-											"value": "postgresql_generate_metadata_tables"
+											"value": "azuresql_generate_metadata_tables"
 										},
 										"DATABASE_NAME": {
 											"type": "String",
@@ -512,7 +518,7 @@
 									"storedProcedureParameters": {
 										"COMPONENT_NAME": {
 											"type": "String",
-											"value": "postgresql_generate_metadata_columns"
+											"value": "azuresql_generate_metadata_columns"
 										},
 										"DATABASE_NAME": {
 											"type": "String",
@@ -760,14 +766,14 @@
 		"parameters": {
 			"PARAM_SOURCE_TYPE": {
 				"type": "string",
-				"defaultValue": "POSTGRE_SQL"
+				"defaultValue": "AZURE_SQL"
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
 			}
 		},
 		"folder": {
-			"name": "SDLH/Postgre_SQL"
+			"name": "SDLH/Azure_SQL"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-07-25T15:14:09Z"

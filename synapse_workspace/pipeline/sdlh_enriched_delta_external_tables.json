@@ -1,0 +1,141 @@
+{
+	"name": "sdlh_enriched_delta_external_tables",
+	"properties": {
+		"description": "Pipeline to read RAW parquet files, then land as delta files in the ENRICHED and create external tables a SERVERLESS database",
+		"activities": [
+			{
+				"name": "enriched_delta_external_tables",
+				"description": "This notebook performs the ETL process between Parquet RAW and Delta files in ENRICHED based on the storage queue messages.  With the help of metadata stored in the metadata DB, It uses information schema from the source system. It maps the datatypes to the closest datatype that exists in serverless SQL pool, and creates external tables with a very similar schema to the source tables.",
+				"type": "SynapseNotebook",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"notebook": {
+						"referenceName": "nb_lakehouse_orchestration_py",
+						"type": "NotebookReference"
+					},
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_SOURCE_GROUPING_ID": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+								"type": "Expression"
+							},
+							"type": "int"
+						},
+						"PARAM_STORAGE_QUEUE_NAME": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_STORAGE_QUEUE_NAME",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_PIPELINE_NAME": {
+							"value": {
+								"value": "@pipeline().Pipeline",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_PIPELINE_RUN_ID": {
+							"value": {
+								"value": "@pipeline().RunId",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_TRIGGERING_PIPELINE_NAME": {
+							"value": {
+								"value": "@pipeline()?.TriggeredByPipelineName",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+							"value": {
+								"value": "@pipeline()?.TriggeredByPipelineRunId",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_TRIGGER_NAME": {
+							"value": {
+								"value": "@pipeline().TriggerName",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_TRIGGER_TYPE": {
+							"value": {
+								"value": "@pipeline().TriggerType",
+								"type": "Expression"
+							},
+							"type": "string"
+						},
+						"PARAM_TRIGGER_TIME": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_TRIGGER_TIME",
+								"type": "Expression"
+							},
+							"type": "string"
+						}
+					},
+					"snapshot": true,
+					"sparkPool": {
+						"referenceName": "PARAM_SPARK_POOL_NAME",
+						"type": "BigDataPoolReference"
+					},
+					"executorSize": "Small",
+					"conf": {
+						"spark.dynamicAllocation.enabled": false,
+						"spark.dynamicAllocation.minExecutors": 2,
+						"spark.dynamicAllocation.maxExecutors": 2
+					},
+					"driverSize": "Small",
+					"numExecutors": 2
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int"
+			},
+			"PARAM_STORAGE_QUEUE_NAME": {
+				"type": "string"
+			},
+			"PARAM_TRIGGER_TIME": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"annotations": []
+	}
+}

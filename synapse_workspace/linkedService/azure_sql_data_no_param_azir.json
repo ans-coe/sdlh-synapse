@@ -1,11 +1,6 @@
 {
-	"name": "azure_sql_sdlh_azir",
+	"name": "azure_sql_data_no_param_azir",
 	"properties": {
-		"parameters": {
-			"CONNECTION_STRING_SECRET_NAME": {
-				"type": "string"
-			}
-		},
 		"annotations": [],
 		"type": "AzureSqlDatabase",
 		"typeProperties": {
@@ -15,10 +10,7 @@
 					"referenceName": "keyvault_data_azir",
 					"type": "LinkedServiceReference"
 				},
-				"secretName": {
-					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
-					"type": "Expression"
-				}
+				"secretName": "azure-sql-connection-string-001"
 			}
 		},
 		"connectVia": {

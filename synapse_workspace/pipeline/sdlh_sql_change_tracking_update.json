@@ -1,0 +1,189 @@
+{
+	"name": "sdlh_sql_change_tracking_update",
+	"properties": {
+		"activities": [
+			{
+				"name": "update_change_tracking_value",
+				"description": "This for loop iterates through the each required item from ETL.SQLTableMetadata where a new change tracking value is required to be set.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lookup_change_tracking_updates",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_change_tracking_updates').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "lookup_set_change_tracking_value",
+							"description": "Lookup the new change tracking value from ETL.Log",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT  MAX([INCREMENTAL_KEY_VALUE]) AS NEW_CHANGE_TRACKING_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline()?.TriggeredByPipelineRunId}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								}
+							}
+						},
+						{
+							"name": "if_update_required",
+							"description": "Check if there are any required tables before executing required activity.",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "lookup_set_change_tracking_value",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(empty(activity('lookup_set_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE))",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "stored_procedure_write_change_tracking_activity",
+										"description": "Execute stored procedure to update the change tracking of each required table,",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[ETL].[usp_SQLUpdateChangeTracking]",
+											"storedProcedureParameters": {
+												"DATABASE_NAME": {
+													"value": {
+														"value": "@item().DATABASE_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"NEW_CHANGE_TRACKING_VALUE": {
+													"value": {
+														"value": "@activity('lookup_set_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"SCHEMA_NAME": {
+													"value": {
+														"value": "@item().SCHEMA_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"SOURCE_SYSTEM": {
+													"value": {
+														"value": "@item().SOURCE_SYSTEM",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"TABLE_NAME": {
+													"value": {
+														"value": "@item().TABLE_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "azure_sql_data_no_param_azir",
+											"type": "LinkedServiceReference"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_change_tracking_updates",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is WATERMARK.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_SYSTEM]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CHANGE_TRACKING'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "string"
+			},
+			"PARAM_PIPELINE_RUN_ID": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/SQL_Server/Support"
+		},
+		"annotations": []
+	}
+}

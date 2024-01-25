@@ -1,0 +1,188 @@
+{
+	"name": "sdlh_sql_high_watermark_update",
+	"properties": {
+		"activities": [
+			{
+				"name": "update_watermark_value",
+				"description": "This for loop iterates through the each required item from ETL.SQLTableMetadata where a new watermark value is required to be set.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_watermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_tables_watermark').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "lookup_set_watermark_value",
+							"description": "Lookup the new watermark value from ETL.Log",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "SELECT CAST(INCREMENTAL_KEY_VALUE AS DATETIME2) AS NEW_WATERMARK_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline()?.TriggeredByPipelineRunId}'",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								}
+							}
+						},
+						{
+							"name": "if_update_required",
+							"description": "Check if there are any required tables before executing required activity.",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "lookup_set_watermark_value",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@not(empty(activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE))\n\n",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "stored_procedure_write_watermark_activity",
+										"description": "Execute stored procedure to update the watermark of each required table,",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[ETL].[usp_SQLUpdateWatermark]",
+											"storedProcedureParameters": {
+												"DATABASE_NAME": {
+													"value": {
+														"value": "@item().DATABASE_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"NEW_WATERMARK_VALUE": {
+													"value": {
+														"value": "@activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE",
+														"type": "Expression"
+													},
+													"type": "DateTime"
+												},
+												"SCHEMA_NAME": {
+													"value": {
+														"value": "@item().SCHEMA_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"SOURCE_SYSTEM": {
+													"value": {
+														"value": "@item().SOURCE_SYSTEM",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"TABLE_NAME": {
+													"value": {
+														"value": "@item().TABLE_NAME",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "azure_sql_data_no_param_azir",
+											"type": "LinkedServiceReference"
+										}
+									}
+								]
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_watermark",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_SYSTEM]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[WATERMARK_COLUMN]\n    ,[LAST_WATERMARK_VALUE]\n    FROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "string"
+			},
+			"PARAM_PIPELINE_RUN_ID": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/SQL_Server/Support"
+		},
+		"annotations": []
+	}
+}

@@ -1,9 +1,8 @@
 {
 	"name": "sql_sdlh_shir",
 	"properties": {
-		"description": "SDLH SQL Server linked service. Its purpose is to connect to a multitude of SQL Server databases dynamically.",
 		"parameters": {
-			"SOURCE_SYSTEM_CONNECTION_STRING": {
+			"CONNECTION_STRING_SECRET_NAME": {
 				"type": "string"
 			}
 		},
@@ -17,15 +16,16 @@
 					"type": "LinkedServiceReference"
 				},
 				"secretName": {
-					"value": "@linkedService().SOURCE_SYSTEM_CONNECTION_STRING",
+					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
 					"type": "Expression"
 				}
 			}
 		},
 		"connectVia": {
-			"referenceName": "PARAM_SHIR_NAME",
+			"referenceName": "shir-dcoe-data-uksouth-002",
 			"type": "IntegrationRuntimeReference"
-		}
+		},
+		"description": "Added as part of ANS SDLH deployment"
 	},
 	"type": "Microsoft.Synapse/workspaces/linkedservices"
 }
