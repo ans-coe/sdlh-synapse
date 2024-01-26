@@ -22,7 +22,7 @@
 			}
 		},
 		"connectVia": {
-			"referenceName": "shir-dcoe-data-uksouth-002",
+			"referenceName": "PARAM_SHIR_NAME",
 			"type": "IntegrationRuntimeReference"
 		},
 		"description": "Added as part of ANS SDLH deployment"
