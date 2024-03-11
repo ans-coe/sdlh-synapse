@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_high_watermark_incremental_load",
+	"name": "sdlh_azuresqlmi_high_watermark_incremental_load",
 	"properties": {
 		"activities": [
 			{
@@ -78,7 +78,7 @@
 									"partitionOption": "None"
 								},
 								"dataset": {
-									"referenceName": "sdlh_sql_db_table",
+									"referenceName": "sdlh_azuresqlmi_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SOURCE_CONNECTION_STRING": {
@@ -461,7 +461,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "sdlh_sql_db_table",
+												"referenceName": "sdlh_azuresqlmi_db_table",
 												"type": "DatasetReference",
 												"parameters": {
 													"SOURCE_CONNECTION_STRING": {
@@ -921,7 +921,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Azure_SQL_MI/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

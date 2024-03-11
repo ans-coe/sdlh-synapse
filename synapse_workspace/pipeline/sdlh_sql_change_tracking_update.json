@@ -38,7 +38,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT  MAX([INCREMENTAL_KEY_VALUE]) AS NEW_CHANGE_TRACKING_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline()?.TriggeredByPipelineRunId}'",
+										"value": "SELECT MAX([NEW_INCREMENTAL_KEY_VALUE]) AS NEW_CHANGE_TRACKING_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [OBJECT_NAME] = '@{item().OBJECT_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID}'",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -71,6 +71,185 @@
 									"value": "@not(empty(activity('lookup_set_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE))",
 									"type": "Expression"
 								},
+								"ifFalseActivities": [
+									{
+										"name": "create_log_entry_no_action_required",
+										"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+												"storedProcedureParameters": {
+													"SOURCE_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_SYSTEM": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_GROUPING_ID": {
+														"type": "Int32",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+															"type": "Expression"
+														}
+													},
+													"OBJECT_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().OBJECT_NAME",
+															"type": "Expression"
+														}
+													},
+													"DATABASE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().DATABASE_NAME",
+															"type": "Expression"
+														}
+													},
+													"SCHEMA_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().SCHEMA_NAME",
+															"type": "Expression"
+														}
+													},
+													"TABLE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().TABLE_NAME",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@pipeline().TriggerTime",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerType",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_NAME",
+															"type": "Expression"
+														}
+													},
+													"OPERATION": {
+														"type": "String",
+														"value": "No Action Required"
+													},
+													"COMPONENT_NAME": {
+														"type": "String",
+														"value": "update_change_tracking"
+													},
+													"TARGET_SYSTEM": {
+														"type": "String",
+														"value": null
+													},
+													"START_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"END_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"DURATION_SECONDS": {
+														"type": "Int32",
+														"value": null
+													},
+													"INSERTS": {
+														"type": "Int32",
+														"value": null
+													},
+													"UPDATES": {
+														"type": "Int32",
+														"value": null
+													},
+													"DELETES": {
+														"type": "Int32",
+														"value": null
+													},
+													"ERROR_MESSAGE": {
+														"type": "String",
+														"value": null
+													},
+													"NEW_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": "No Change"
+													},
+													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": null
+													}
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								],
 								"ifTrueActivities": [
 									{
 										"name": "stored_procedure_write_change_tracking_activity",
@@ -88,35 +267,42 @@
 										"typeProperties": {
 											"storedProcedureName": "[ETL].[usp_SQLUpdateChangeTracking]",
 											"storedProcedureParameters": {
-												"DATABASE_NAME": {
+												"PARAM_DATABASE_NAME": {
 													"value": {
 														"value": "@item().DATABASE_NAME",
 														"type": "Expression"
 													},
 													"type": "String"
 												},
-												"NEW_CHANGE_TRACKING_VALUE": {
+												"PARAM_NEW_CHANGE_TRACKING_VALUE": {
 													"value": {
 														"value": "@activity('lookup_set_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE",
 														"type": "Expression"
 													},
 													"type": "Int32"
 												},
-												"SCHEMA_NAME": {
+												"PARAM_SCHEMA_NAME": {
 													"value": {
 														"value": "@item().SCHEMA_NAME",
 														"type": "Expression"
 													},
 													"type": "String"
 												},
-												"SOURCE_SYSTEM": {
+												"PARAM_SOURCE_SYSTEM": {
 													"value": {
 														"value": "@item().SOURCE_SYSTEM",
 														"type": "Expression"
 													},
 													"type": "String"
 												},
-												"TABLE_NAME": {
+												"PARAM_SOURCE_TYPE": {
+													"value": {
+														"value": "@item().SOURCE_TYPE",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"PARAM_TABLE_NAME": {
 													"value": {
 														"value": "@item().TABLE_NAME",
 														"type": "Expression"
@@ -128,6 +314,193 @@
 										"linkedServiceName": {
 											"referenceName": "azure_sql_data_no_param_azir",
 											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "create_log_entry_change_tracking",
+										"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "stored_procedure_write_change_tracking_activity",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+												"storedProcedureParameters": {
+													"SOURCE_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_SYSTEM": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_GROUPING_ID": {
+														"type": "Int32",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+															"type": "Expression"
+														}
+													},
+													"OBJECT_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().OBJECT_NAME",
+															"type": "Expression"
+														}
+													},
+													"DATABASE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().DATABASE_NAME",
+															"type": "Expression"
+														}
+													},
+													"SCHEMA_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().SCHEMA_NAME",
+															"type": "Expression"
+														}
+													},
+													"TABLE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().TABLE_NAME",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@pipeline().TriggerTime",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerType",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_NAME",
+															"type": "Expression"
+														}
+													},
+													"OPERATION": {
+														"type": "String",
+														"value": "Execute Stored Procedure"
+													},
+													"COMPONENT_NAME": {
+														"type": "String",
+														"value": "update_change_tracking"
+													},
+													"TARGET_SYSTEM": {
+														"type": "String",
+														"value": "Metadata DB"
+													},
+													"START_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"END_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"DURATION_SECONDS": {
+														"type": "Int32",
+														"value": null
+													},
+													"INSERTS": {
+														"type": "Int32",
+														"value": null
+													},
+													"UPDATES": {
+														"type": "Int32",
+														"value": null
+													},
+													"DELETES": {
+														"type": "Int32",
+														"value": null
+													},
+													"ERROR_MESSAGE": {
+														"type": "String",
+														"value": null
+													},
+													"NEW_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": {
+															"value": "@activity('lookup_set_change_tracking_value').output.firstRow.NEW_CHANGE_TRACKING_VALUE",
+															"type": "Expression"
+														}
+													},
+													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": null
+													}
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
 										}
 									}
 								]
@@ -153,7 +526,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_SYSTEM]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CHANGE_TRACKING'",
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,CASE\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MYSQL' THEN CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_',TABLE_NAME)\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MY_SQL' THEN CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_',TABLE_NAME)\n        ELSE CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_',SCHEMA_NAME, '_',TABLE_NAME)\n    END AS [OBJECT_NAME]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CHANGE_TRACKING'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -171,18 +544,24 @@
 			}
 		],
 		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string"
+			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
 			},
 			"PARAM_SOURCE_GROUPING_ID": {
 				"type": "string"
 			},
-			"PARAM_PIPELINE_RUN_ID": {
+			"PARAM_TRIGGERING_PIPELINE_NAME": {
+				"type": "string"
+			},
+			"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
 				"type": "string"
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Common"
 		},
 		"annotations": []
 	}

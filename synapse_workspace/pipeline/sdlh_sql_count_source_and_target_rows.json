@@ -20,7 +20,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [OBJECT_NAME] FROM [ETL].[JsonMetadata] \nWHERE \nSOURCE_SYSTEM= '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' \nAND\nSOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND IS_ENABLED = '@{pipeline().parameters.PARAM_IS_ENABLED}'\n",
+							"value": "SELECT [OBJECT_NAME] FROM [ETL].[JsonMetadata] \nWHERE SOURCE_SYSTEM= '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' \nAND SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND IS_ENABLED = '@{pipeline().parameters.PARAM_IS_ENABLED}'\nAND SOURCE_GROUPING_ID BETWEEN @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_START} AND @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_END}\n",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -1258,8 +1258,16 @@
 				"type": "string"
 			},
 			"PARAM_IS_ENABLED": {
-				"type": "string",
-				"defaultValue": "1"
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_SOURCE_GROUPING_ID_START": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"PARAM_SOURCE_GROUPING_ID_END": {
+				"type": "int",
+				"defaultValue": 100
 			}
 		},
 		"folder": {

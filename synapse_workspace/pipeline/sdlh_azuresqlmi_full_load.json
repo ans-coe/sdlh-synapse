@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_full_load",
+	"name": "sdlh_azuresqlmi_full_load",
 	"properties": {
 		"activities": [
 			{
@@ -161,7 +161,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "sdlh_sql_db_table",
+														"referenceName": "sdlh_azuresqlmi_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -650,7 +650,7 @@
 														"partitionOption": "None"
 													},
 													"dataset": {
-														"referenceName": "sdlh_sql_db_table",
+														"referenceName": "sdlh_azuresqlmi_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -714,7 +714,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "sdlh_sql_db_table",
+														"referenceName": "sdlh_azuresqlmi_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -1436,7 +1436,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Azure_SQL_MI/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

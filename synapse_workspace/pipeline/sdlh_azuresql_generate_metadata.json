@@ -51,7 +51,7 @@
 								"source": {
 									"type": "SqlServerSource",
 									"sqlReaderQuery": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\n    ,NULLIF('@{activity('lookup_new_columns').output.firstRow.COLUMNS_META_CHANGE_TRACKING}', '') AS COLUMNS_META_CHANGE_TRACKING\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -92,8 +92,14 @@
 											"value": "@item().SOURCE_CONNECTION_STRING",
 											"type": "Expression"
 										},
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA"
+										"SCHEMA_NAME": {
+											"value": "@item().SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TABLE_NAME": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										}
 									}
 								}
 							],
@@ -113,7 +119,7 @@
 							"type": "Copy",
 							"dependsOn": [
 								{
-									"activity": "sql_etl_tables",
+									"activity": "sql_update_column",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -131,7 +137,7 @@
 								"source": {
 									"type": "SqlServerSource",
 									"sqlReaderQuery": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' ) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_SCHEMA AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'",
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')}) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_SCHEMA AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -173,8 +179,14 @@
 											"value": "@item().SOURCE_CONNECTION_STRING",
 											"type": "Expression"
 										},
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA"
+										"SCHEMA_NAME": {
+											"value": "@item().SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"TABLE_NAME": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										}
 									}
 								}
 							],
@@ -205,7 +217,7 @@
 								"source": {
 									"type": "SqlServerSource",
 									"sqlReaderQuery": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' )),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_META\n    ,STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,'') AS COLUMNS_LIST\n    ,(SELECT COLUMN_NAME\n        ,DATA_TYPE\n        ,CHARACTER_MAXIMUM_LENGTH\n    FROM cte_col_with_alias\n    FOR JSON PATH) AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(LOWER(COLUMN_NAME))), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\n    ,CASE\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('CT.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        ELSE NULL\n    END AS COLUMN_WITH_ALIAS_CHANGE_TRACKING\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS_CHANGE_TRACKING AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META_CHANGE_TRACKING\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_LIST\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n    ),1,0,''), '&amp;', '&'), '&lt;', ''), '&gt;', '') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.TABLE_NAME",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -231,7 +243,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "sql_etl_columns",
+									"activity": "if_change_tracking_set_join_condition",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -276,6 +288,13 @@
 										},
 										"type": "String"
 									},
+									"PARAM_SOURCE_TYPE": {
+										"value": {
+											"value": "@item().SOURCE_TYPE",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
 									"PARAM_TABLE_NAME": {
 										"value": {
 											"value": "@item().TABLE_NAME",
@@ -307,7 +326,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
+										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -348,68 +367,10 @@
 									"type": "AzureSqlSource",
 									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
 									"storedProcedureParameters": {
-										"COMPONENT_NAME": {
-											"type": "String",
-											"value": "azuresql_generate_metadata_tables"
-										},
-										"DATABASE_NAME": {
+										"SOURCE_TYPE": {
 											"type": "String",
 											"value": {
-												"value": "@item().DATABASE_NAME",
-												"type": "Expression"
-											}
-										},
-										"DELETES": {
-											"type": "Int32",
-											"value": null
-										},
-										"DURATION_SECONDS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_tables').output.copyDuration",
-												"type": "Expression"
-											}
-										},
-										"END_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@utcnow()",
-												"type": "Expression"
-											}
-										},
-										"ERROR_MESSAGE": {
-											"type": "String",
-											"value": null
-										},
-										"INSERTS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_tables').output.rowsCopied",
-												"type": "Expression"
-											}
-										},
-										"OPERATION": {
-											"type": "String",
-											"value": "Copy Activity"
-										},
-										"PIPELINE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().Pipeline",
-												"type": "Expression"
-											}
-										},
-										"PIPELINE_RUN_ID": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().RunId",
-												"type": "Expression"
-											}
-										},
-										"SCHEMA_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@item().SCHEMA_NAME",
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
 												"type": "Expression"
 											}
 										},
@@ -420,10 +381,28 @@
 												"type": "Expression"
 											}
 										},
-										"START_TIME": {
-											"type": "DateTime",
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": null
+										},
+										"OBJECT_NAME": {
+											"type": "String",
 											"value": {
-												"value": "@utcnow()",
+												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().SCHEMA_NAME, '_',item().TABLE_NAME)",
+												"type": "Expression"
+											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().SCHEMA_NAME",
 												"type": "Expression"
 											}
 										},
@@ -431,17 +410,6 @@
 											"type": "String",
 											"value": {
 												"value": "@item().TABLE_NAME",
-												"type": "Expression"
-											}
-										},
-										"TARGET_SYSTEM": {
-											"type": "String",
-											"value": "Metadata DB"
-										},
-										"TRIGGER_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerName",
 												"type": "Expression"
 											}
 										},
@@ -459,10 +427,17 @@
 												"type": "Expression"
 											}
 										},
-										"TRIGGERING_PIPELINE_NAME": {
+										"PIPELINE_RUN_ID": {
 											"type": "String",
 											"value": {
-												"value": "@pipeline()?.TriggeredByPipelineName",
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
 												"type": "Expression"
 											}
 										},
@@ -473,8 +448,71 @@
 												"type": "Expression"
 											}
 										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "azuresql_generate_metadata_tables"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
 										"UPDATES": {
 											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
 											"value": null
 										}
 									},
@@ -516,68 +554,10 @@
 									"type": "AzureSqlSource",
 									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
 									"storedProcedureParameters": {
-										"COMPONENT_NAME": {
-											"type": "String",
-											"value": "azuresql_generate_metadata_columns"
-										},
-										"DATABASE_NAME": {
+										"SOURCE_TYPE": {
 											"type": "String",
 											"value": {
-												"value": "@item().DATABASE_NAME",
-												"type": "Expression"
-											}
-										},
-										"DELETES": {
-											"type": "Int32",
-											"value": null
-										},
-										"DURATION_SECONDS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_columns').output.copyDuration",
-												"type": "Expression"
-											}
-										},
-										"END_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@utcnow()",
-												"type": "Expression"
-											}
-										},
-										"ERROR_MESSAGE": {
-											"type": "String",
-											"value": null
-										},
-										"INSERTS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_columns').output.rowsCopied",
-												"type": "Expression"
-											}
-										},
-										"OPERATION": {
-											"type": "String",
-											"value": "Copy Activity"
-										},
-										"PIPELINE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().Pipeline",
-												"type": "Expression"
-											}
-										},
-										"PIPELINE_RUN_ID": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().RunId",
-												"type": "Expression"
-											}
-										},
-										"SCHEMA_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@item().SCHEMA_NAME",
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
 												"type": "Expression"
 											}
 										},
@@ -588,10 +568,28 @@
 												"type": "Expression"
 											}
 										},
-										"START_TIME": {
-											"type": "DateTime",
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": null
+										},
+										"OBJECT_NAME": {
+											"type": "String",
 											"value": {
-												"value": "@utcnow()",
+												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().SCHEMA_NAME, '_',item().TABLE_NAME)",
+												"type": "Expression"
+											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().SCHEMA_NAME",
 												"type": "Expression"
 											}
 										},
@@ -599,17 +597,6 @@
 											"type": "String",
 											"value": {
 												"value": "@item().TABLE_NAME",
-												"type": "Expression"
-											}
-										},
-										"TARGET_SYSTEM": {
-											"type": "String",
-											"value": "Metadata DB"
-										},
-										"TRIGGER_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerName",
 												"type": "Expression"
 											}
 										},
@@ -627,10 +614,17 @@
 												"type": "Expression"
 											}
 										},
-										"TRIGGERING_PIPELINE_NAME": {
+										"PIPELINE_RUN_ID": {
 											"type": "String",
 											"value": {
-												"value": "@pipeline()?.TriggeredByPipelineName",
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
 												"type": "Expression"
 											}
 										},
@@ -641,8 +635,71 @@
 												"type": "Expression"
 											}
 										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "azuresql_generate_metadata_columns"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
 										"UPDATES": {
 											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
 											"value": null
 										}
 									},
@@ -657,6 +714,124 @@
 									}
 								},
 								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "if_change_tracking_set_join_condition",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_columns",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(item().LOAD_TYPE,'CHANGE_TRACKING')",
+									"type": "Expression"
+								},
+								"ifTrueActivities": [
+									{
+										"name": "update_change_tracking_join_condition",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderQuery": {
+													"value": "WITH cte_ct_conditions AS (\nSELECT SOURCE_SYSTEM\n    ,DATABASE_NAME\n    ,SCHEMA_NAME\n    ,TABLE_NAME\n    ,STRING_AGG(CONCAT('S.[',COLUMN_NAME, '] = CT.[', COLUMN_NAME, ']'), ' AND ') AS CONDITION\nFROM ETL.SQLColumnMetadata\nWHERE SOURCE_TYPE = '@{item().SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{item().SOURCE_SYSTEM}'\nAND DATABASE_NAME = '@{item().DATABASE_NAME}'\nAND SCHEMA_NAME = '@{item().SCHEMA_NAME}'\nAND TABLE_NAME = '@{item().TABLE_NAME}'\nAND IS_ENABLED = 1\nAND COLUMN_NAME IN (@{concat('''', replace(item().PRIMARY_KEYS, ',' , ''','''), '''')})\nGROUP BY SOURCE_SYSTEM, DATABASE_NAME, SCHEMA_NAME, TABLE_NAME)\n\nUPDATE ETL.SQLTableMetadata SET\nCHANGE_TRACKING_JOIN_CONDITION = A.CONDITION\nFROM cte_ct_conditions AS A\nINNER JOIN ETL.SQLTableMetadata AS B\n    ON A.SOURCE_SYSTEM = B.SOURCE_SYSTEM\n    AND A.DATABASE_NAME = B.DATABASE_NAME\n    AND A.SCHEMA_NAME = B.SCHEMA_NAME\n    AND A.TABLE_NAME = B.TABLE_NAME\n\nSELECT '1' AS 'Output'",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "sql_update_column",
+							"description": "This step is required to disable any columns that have been deleted from the source system since last run",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_SQLUpdateColumns]",
+								"storedProcedureParameters": {
+									"PARAM_DATABASE_NAME": {
+										"value": {
+											"value": "@item().DATABASE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SCHEMA_NAME": {
+										"value": {
+											"value": "@item().SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": {
+											"value": "@item().SOURCE_SYSTEM",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SOURCE_TYPE": {
+										"value": {
+											"value": "@item().SOURCE_TYPE",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_TABLE_NAME": {
+										"value": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
 							}
 						}
 					]
@@ -686,7 +861,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT * FROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'",
+							"value": "SELECT *\nFROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND SOURCE_GROUPING_ID BETWEEN @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_START} AND @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_END}",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -770,6 +945,14 @@
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID_START": {
+				"type": "string",
+				"defaultValue": "1"
+			},
+			"PARAM_SOURCE_GROUPING_ID_END": {
+				"type": "string",
+				"defaultValue": "100"
 			}
 		},
 		"folder": {

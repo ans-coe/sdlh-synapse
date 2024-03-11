@@ -109,7 +109,7 @@
 							"type": "Copy",
 							"dependsOn": [
 								{
-									"activity": "sql_etl_tables",
+									"activity": "sql_update_column",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -127,7 +127,7 @@
 								"source": {
 									"type": "MySqlSource",
 									"query": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' ) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'",
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')}) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'",
 										"type": "Expression"
 									}
 								},
@@ -197,7 +197,7 @@
 								"source": {
 									"type": "MySqlSource",
 									"query": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN ( '@{item().COLUMNS_TO_EXCLUDE}' )),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.`',COLUMN_NAME,'`', ' AS ' , COLUMN_ALIAS) AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,GROUP_CONCAT(DISTINCT COLUMN_WITH_ALIAS) COLUMNS_META\n    ,GROUP_CONCAT(DISTINCT COLUMN_NAME) COLUMNS_LIST\n    ,REPLACE((SELECT\n        JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME', COLUMN_NAME, 'DATA_TYPE', DATA_TYPE, 'CHARACTER_MAXIMUM_LENGTH', CHARACTER_MAXIMUM_LENGTH))\n        FROM cte_col_with_alias),' ','') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.`',COLUMN_NAME,'`', ' AS ' , COLUMN_ALIAS) AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,GROUP_CONCAT(DISTINCT COLUMN_WITH_ALIAS) COLUMNS_META\n    ,GROUP_CONCAT(DISTINCT COLUMN_NAME) COLUMNS_LIST\n    ,REPLACE((SELECT\n        JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME', COLUMN_NAME, 'DATA_TYPE', DATA_TYPE, 'CHARACTER_MAXIMUM_LENGTH', CHARACTER_MAXIMUM_LENGTH))\n        FROM cte_col_with_alias),' ','') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
 										"type": "Expression"
 									}
 								},
@@ -338,68 +338,10 @@
 									"type": "AzureSqlSource",
 									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
 									"storedProcedureParameters": {
-										"COMPONENT_NAME": {
-											"type": "String",
-											"value": "mysql_generate_metadata_tables"
-										},
-										"DATABASE_NAME": {
+										"SOURCE_TYPE": {
 											"type": "String",
 											"value": {
-												"value": "@item().DATABASE_NAME",
-												"type": "Expression"
-											}
-										},
-										"DELETES": {
-											"type": "Int32",
-											"value": null
-										},
-										"DURATION_SECONDS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_tables').output.copyDuration",
-												"type": "Expression"
-											}
-										},
-										"END_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@utcnow()",
-												"type": "Expression"
-											}
-										},
-										"ERROR_MESSAGE": {
-											"type": "String",
-											"value": null
-										},
-										"INSERTS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_tables').output.rowsCopied",
-												"type": "Expression"
-											}
-										},
-										"OPERATION": {
-											"type": "String",
-											"value": "Copy Activity"
-										},
-										"PIPELINE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().Pipeline",
-												"type": "Expression"
-											}
-										},
-										"PIPELINE_RUN_ID": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().RunId",
-												"type": "Expression"
-											}
-										},
-										"SCHEMA_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@item().SCHEMA_NAME",
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
 												"type": "Expression"
 											}
 										},
@@ -410,28 +352,32 @@
 												"type": "Expression"
 											}
 										},
-										"START_TIME": {
-											"type": "DateTime",
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": null
+										},
+										"OBJECT_NAME": {
+											"type": "String",
 											"value": {
-												"value": "@utcnow()",
+												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().TABLE_NAME)",
 												"type": "Expression"
 											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": null
 										},
 										"TABLE_NAME": {
 											"type": "String",
 											"value": {
 												"value": "@item().TABLE_NAME",
-												"type": "Expression"
-											}
-										},
-										"TARGET_SYSTEM": {
-											"type": "String",
-											"value": "Metadata DB"
-										},
-										"TRIGGER_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerName",
 												"type": "Expression"
 											}
 										},
@@ -449,10 +395,17 @@
 												"type": "Expression"
 											}
 										},
-										"TRIGGERING_PIPELINE_NAME": {
+										"PIPELINE_RUN_ID": {
 											"type": "String",
 											"value": {
-												"value": "@pipeline()?.TriggeredByPipelineName",
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
 												"type": "Expression"
 											}
 										},
@@ -463,8 +416,71 @@
 												"type": "Expression"
 											}
 										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "mysql_generate_metadata_columns"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
 										"UPDATES": {
 											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
 											"value": null
 										}
 									},
@@ -506,68 +522,10 @@
 									"type": "AzureSqlSource",
 									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
 									"storedProcedureParameters": {
-										"COMPONENT_NAME": {
-											"type": "String",
-											"value": "mysql_generate_metadata_columns"
-										},
-										"DATABASE_NAME": {
+										"SOURCE_TYPE": {
 											"type": "String",
 											"value": {
-												"value": "@item().DATABASE_NAME",
-												"type": "Expression"
-											}
-										},
-										"DELETES": {
-											"type": "Int32",
-											"value": null
-										},
-										"DURATION_SECONDS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_columns').output.copyDuration",
-												"type": "Expression"
-											}
-										},
-										"END_TIME": {
-											"type": "DateTime",
-											"value": {
-												"value": "@utcnow()",
-												"type": "Expression"
-											}
-										},
-										"ERROR_MESSAGE": {
-											"type": "String",
-											"value": null
-										},
-										"INSERTS": {
-											"type": "Int32",
-											"value": {
-												"value": "@activity('sql_etl_columns').output.rowsCopied",
-												"type": "Expression"
-											}
-										},
-										"OPERATION": {
-											"type": "String",
-											"value": "Copy Activity"
-										},
-										"PIPELINE_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().Pipeline",
-												"type": "Expression"
-											}
-										},
-										"PIPELINE_RUN_ID": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().RunId",
-												"type": "Expression"
-											}
-										},
-										"SCHEMA_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@item().SCHEMA_NAME",
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
 												"type": "Expression"
 											}
 										},
@@ -578,28 +536,32 @@
 												"type": "Expression"
 											}
 										},
-										"START_TIME": {
-											"type": "DateTime",
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": null
+										},
+										"OBJECT_NAME": {
+											"type": "String",
 											"value": {
-												"value": "@utcnow()",
+												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().TABLE_NAME)",
 												"type": "Expression"
 											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().DATABASE_NAME",
+												"type": "Expression"
+											}
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": null
 										},
 										"TABLE_NAME": {
 											"type": "String",
 											"value": {
 												"value": "@item().TABLE_NAME",
-												"type": "Expression"
-											}
-										},
-										"TARGET_SYSTEM": {
-											"type": "String",
-											"value": "Metadata DB"
-										},
-										"TRIGGER_NAME": {
-											"type": "String",
-											"value": {
-												"value": "@pipeline().TriggerName",
 												"type": "Expression"
 											}
 										},
@@ -617,10 +579,17 @@
 												"type": "Expression"
 											}
 										},
-										"TRIGGERING_PIPELINE_NAME": {
+										"PIPELINE_RUN_ID": {
 											"type": "String",
 											"value": {
-												"value": "@pipeline()?.TriggeredByPipelineName",
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
 												"type": "Expression"
 											}
 										},
@@ -631,8 +600,71 @@
 												"type": "Expression"
 											}
 										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "mysql_generate_metadata_columns"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "Metadata DB"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.copyDuration",
+												"type": "Expression"
+											}
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": {
+												"value": "@activity('sql_etl_tables').output.rowsCopied",
+												"type": "Expression"
+											}
+										},
 										"UPDATES": {
 											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
 											"value": null
 										}
 									},
@@ -647,6 +679,64 @@
 									}
 								},
 								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "sql_update_column",
+							"description": "This step is required to disable any columns that have been deleted from the source system since last run",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "sql_etl_tables",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_SQLUpdateColumns]",
+								"storedProcedureParameters": {
+									"DATABASE_NAME": {
+										"value": {
+											"value": "@item().DATABASE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SCHEMA_NAME": {
+										"value": {
+											"value": "@item().SCHEMA_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"SOURCE_SYSTEM": {
+										"value": {
+											"value": "@item().SOURCE_SYSTEM",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"TABLE_NAME": {
+										"value": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
 							}
 						}
 					]
@@ -676,7 +766,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT * FROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'",
+							"value": "SELECT *\nFROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND SOURCE_GROUPING_ID BETWEEN @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_START} AND @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID_END}",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -760,6 +850,14 @@
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID_START": {
+				"type": "string",
+				"defaultValue": "1"
+			},
+			"PARAM_SOURCE_GROUPING_ID_END": {
+				"type": "string",
+				"defaultValue": "100"
 			}
 		},
 		"folder": {
