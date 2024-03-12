@@ -91,62 +91,7 @@
 						"type": "AzureSqlSource",
 						"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
 						"storedProcedureParameters": {
-							"COMPONENT_NAME": {
-								"type": "String",
-								"value": "base_generate_metadata"
-							},
-							"DATABASE_NAME": {
-								"type": "String",
-								"value": null
-							},
-							"DELETES": {
-								"type": "Int32",
-								"value": null
-							},
-							"DURATION_SECONDS": {
-								"type": "Int32",
-								"value": {
-									"value": "@activity('load_etl_base_metadata').output.copyDuration",
-									"type": "Expression"
-								}
-							},
-							"END_TIME": {
-								"type": "DateTime",
-								"value": {
-									"value": "@utcnow()",
-									"type": "Expression"
-								}
-							},
-							"ERROR_MESSAGE": {
-								"type": "String",
-								"value": null
-							},
-							"INSERTS": {
-								"type": "Int32",
-								"value": {
-									"value": "@activity('load_etl_base_metadata').output.rowsCopied",
-									"type": "Expression"
-								}
-							},
-							"OPERATION": {
-								"type": "String",
-								"value": "Copy Activity"
-							},
-							"PIPELINE_NAME": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().Pipeline",
-									"type": "Expression"
-								}
-							},
-							"PIPELINE_RUN_ID": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().RunId",
-									"type": "Expression"
-								}
-							},
-							"SCHEMA_NAME": {
+							"SOURCE_TYPE": {
 								"type": "String",
 								"value": null
 							},
@@ -154,27 +99,25 @@
 								"type": "String",
 								"value": null
 							},
-							"START_TIME": {
-								"type": "DateTime",
-								"value": {
-									"value": "@utcnow()",
-									"type": "Expression"
-								}
+							"SOURCE_GROUPING_ID": {
+								"type": "Int32",
+								"value": null
+							},
+							"OBJECT_NAME": {
+								"type": "String",
+								"value": null
+							},
+							"DATABASE_NAME": {
+								"type": "String",
+								"value": null
+							},
+							"SCHEMA_NAME": {
+								"type": "String",
+								"value": null
 							},
 							"TABLE_NAME": {
 								"type": "String",
 								"value": null
-							},
-							"TARGET_SYSTEM": {
-								"type": "String",
-								"value": "Metadata DB"
-							},
-							"TRIGGER_NAME": {
-								"type": "String",
-								"value": {
-									"value": "@pipeline().TriggerName",
-									"type": "Expression"
-								}
 							},
 							"TRIGGER_TIME": {
 								"type": "DateTime",
@@ -190,10 +133,17 @@
 									"type": "Expression"
 								}
 							},
-							"TRIGGERING_PIPELINE_NAME": {
+							"PIPELINE_RUN_ID": {
 								"type": "String",
 								"value": {
-									"value": "@pipeline()?.TriggeredByPipelineName",
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							},
+							"PIPELINE_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().Pipeline",
 									"type": "Expression"
 								}
 							},
@@ -204,8 +154,71 @@
 									"type": "Expression"
 								}
 							},
+							"TRIGGERING_PIPELINE_NAME": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline()?.TriggeredByPipelineName",
+									"type": "Expression"
+								}
+							},
+							"OPERATION": {
+								"type": "String",
+								"value": "Copy Activity"
+							},
+							"COMPONENT_NAME": {
+								"type": "String",
+								"value": "base_generate_metadata"
+							},
+							"TARGET_SYSTEM": {
+								"type": "String",
+								"value": "Metadata DB"
+							},
+							"START_TIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@utcnow()",
+									"type": "Expression"
+								}
+							},
+							"END_TIME": {
+								"type": "DateTime",
+								"value": {
+									"value": "@utcnow()",
+									"type": "Expression"
+								}
+							},
+							"DURATION_SECONDS": {
+								"type": "Int32",
+								"value": {
+									"value": "@activity('load_etl_base_metadata').output.copyDuration",
+									"type": "Expression"
+								}
+							},
+							"INSERTS": {
+								"type": "Int32",
+								"value": {
+									"value": "@activity('load_etl_base_metadata').output.rowsCopied",
+									"type": "Expression"
+								}
+							},
 							"UPDATES": {
 								"type": "Int32",
+								"value": null
+							},
+							"DELETES": {
+								"type": "Int32",
+								"value": null
+							},
+							"ERROR_MESSAGE": {
+								"type": "String",
+								"value": null
+							},
+							"NEW_INCREMENTAL_KEY_VALUE": {
+								"type": "String",
+								"value": null
+							},
+							"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+								"type": "String",
 								"value": null
 							}
 						},

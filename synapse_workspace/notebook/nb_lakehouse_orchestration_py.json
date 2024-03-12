@@ -22,7 +22,7 @@
 			"enableDebugMode": true,
 			"kernelspec": {
 				"name": "synapse_pyspark",
-				"display_name": "python"
+				"display_name": "Synapse PySpark"
 			},
 			"language_info": {
 				"name": "python"
@@ -71,7 +71,7 @@
 					"  <tr>\r\n",
 					"   <td>Darren Price</td>\r\n",
 					"   <td>2024-01-09</td>\r\n",
-					"   <td>2.0</td>\r\n",
+					"   <td>2.1</td>\r\n",
 					"   <td>Updated for SDLH v2.1</td>\r\n",
 					"   <td></td>\r\n",
 					"  </tr>\r\n",
@@ -121,7 +121,7 @@
 				"source": [
 					"pip install azure-storage-queue azure-identity"
 				],
-				"execution_count": 5
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -169,7 +169,7 @@
 					"from datetime import datetime\r\n",
 					"import pyspark.sql.functions as F\r\n",
 					"import msal\r\n",
-					"from pyspark.sql.functions import col, lit, regexp_replace, concat, udf, when, expr, from_json, explode, arrays_zip, current_date, year,month, dayofmonth, hour, days, lower\r\n",
+					"from pyspark.sql.functions import col, lit, trim, ltrim, rtrim, regexp_replace, concat, udf, when, expr, from_json, explode, arrays_zip, current_date, year,month, dayofmonth, hour, days, lower\r\n",
 					"from pyspark.sql.types import *\r\n",
 					"from pyspark.context import SparkContext\r\n",
 					"\r\n",
@@ -187,7 +187,7 @@
 					"from pyspark.sql.functions import col, lit, regexp_replace, concat, collect_list\r\n",
 					"from pyspark.sql import SparkSession"
 				],
-				"execution_count": 6
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -222,7 +222,7 @@
 					"spark.conf.set(\"spark.sql.parquet.datetimeRebaseModeInRead\", \"CORRECTED\")\r\n",
 					"spark.conf.set(\"spark.sql.parquet.datetimeRebaseModeInWrite\", \"CORRECTED\")"
 				],
-				"execution_count": 7
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -255,7 +255,7 @@
 				"source": [
 					"%run utils/nb_util_sql_staged_etl_and_logging_py"
 				],
-				"execution_count": 8
+				"execution_count": 1
 			},
 			{
 				"cell_type": "code",
@@ -273,7 +273,7 @@
 				"source": [
 					"%run utils/nb_util_sql_query_py"
 				],
-				"execution_count": 9
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -317,11 +317,10 @@
 					"PARAM_PIPELINE_RUN_ID = \"\"\r\n",
 					"PARAM_TRIGGERING_PIPELINE_NAME = \"\"\r\n",
 					"PARAM_TRIGGERING_PIPELINE_RUN_ID = \"\"\r\n",
-					"PARAM_TRIGGER_NAME = \"\"\r\n",
 					"PARAM_TRIGGER_TYPE = \"\"\r\n",
 					"PARAM_TRIGGER_TIME = \"\""
 				],
-				"execution_count": 10
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -372,7 +371,7 @@
 					"print (synapse_workspace)\r\n",
 					"print (env)"
 				],
-				"execution_count": 12
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -413,7 +412,7 @@
 					"\r\n",
 					"datalake_staged_container = \"enriched\""
 				],
-				"execution_count": 14
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -470,7 +469,7 @@
 					"\r\n",
 					"sql_access_token_odbc = struct.pack(\"=i\", len(exp_token)) + exp_token"
 				],
-				"execution_count": 13
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -509,7 +508,7 @@
 					"    logging.error(\"*** ERROR - Metadata Database connection has failed. ***\")\r\n",
 					"    raise e"
 				],
-				"execution_count": 15
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -547,9 +546,14 @@
 					"for batch in migrated_to_raw:\r\n",
 					"    for table_msg in batch:\r\n",
 					"        table = table_msg.content\r\n",
-					"        etl_queue.append(table)"
+					"        etl_queue.append(table)\r\n",
+					"\r\n",
+					"# Use set to remove any duplicates in the qeeue (added for a potential re-run scenario)\r\n",
+					"# Then sort list alphabetically for consistent ordering when we next run\r\n",
+					"etl_queue = sorted(set(etl_queue))\r\n",
+					"print(etl_queue)"
 				],
-				"execution_count": null
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -597,7 +601,7 @@
 					"\r\n",
 					"#display(df_objects_metadata_extracted)"
 				],
-				"execution_count": 16
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -628,7 +632,7 @@
 				"source": [
 					"staged_instructions = get_raw_staged_etl_instructions(datalake_staged_container, datalake_storage_name)"
 				],
-				"execution_count": 17
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -665,7 +669,7 @@
 					"tables_list = information_schemas.select('TABLE_NAME').distinct().rdd.flatMap(lambda x:x).collect()#etl_queue\r\n",
 					"external_tables_instructions = ext_table_mapping(tables_list, information_schemas, staged_instructions, datalake_staged_container)"
 				],
-				"execution_count": null
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -694,13 +698,14 @@
 					}
 				},
 				"source": [
-					"CURRENT_VERSIONS = get_delta_versions(tables_list= etl_queue, staged_instructions= staged_instructions)\r\n",
+					"CURRENT_VERSIONS = get_delta_versions(tables_list=etl_queue, staged_instructions=staged_instructions)\r\n",
 					"try:\r\n",
 					"    tables_ingested_successfully = []\r\n",
 					"    print(\"Starting tables ingestion...\")\r\n",
 					"    for table in etl_queue:\r\n",
-					"        raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME, PARAM_TRIGGER_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_NAME, PARAM_PIPELINE_RUN_ID ,staged_instructions)\r\n",
+					"        raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_NAME, PARAM_PIPELINE_RUN_ID, staged_instructions)\r\n",
 					"        tables_ingested_successfully.append(table)\r\n",
+					"        print(f\"\"\"Completed Table: {table}\"\"\")\r\n",
 					"    print(\"All of the tables in the batch were ingested successfully.\")\r\n",
 					"\r\n",
 					"except Exception as exception:\r\n",
@@ -716,7 +721,7 @@
 					"\r\n",
 					"    raise RuntimeError(exception)"
 				],
-				"execution_count": null
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -767,7 +772,7 @@
 				"source": [
 					"create_serverless_databases_and_schemas(synapse_serverless_odbc_url, sql_access_token_odbc, datalake_storage_name, datalake_staged_container)"
 				],
-				"execution_count": null
+				"execution_count": 1
 			},
 			{
 				"cell_type": "markdown",
@@ -809,14 +814,15 @@
 					"    input_external_data_source_name = external_tables_instructions.get(k)[\"EXTERNAL_DATA_SOURCE\"]\r\n",
 					"\r\n",
 					"    try:\r\n",
-					"        ext_table_definition = produce_external_table_definition(database_name = input_database_name,schema_name=input_schema_name, table_name=input_table_name, file_system=datalake_staged_container, data_source=input_external_data_source_name, location=input_file_path, columns_meta=input_columns_meta)\r\n",
+					"        ext_table_definition = produce_external_table_definition(database_name = input_database_name, schema_name=input_schema_name, table_name=input_table_name, file_system=datalake_staged_container, data_source=input_external_data_source_name, location=input_file_path, columns_meta=input_columns_meta)\r\n",
 					"        create_external_table(synapse_serverless_odbc_url, sql_access_token_odbc, str(input_database_name), ext_table_definition)\r\n",
+					"        print(f\"\"\"Completed Table: {input_table_name}\"\"\")\r\n",
 					"    except Exception as err_message:\r\n",
 					"        print(err_message)\r\n",
 					"        list_errors.append({\"table_name\": input_table_name, \"error\":err_message})\r\n",
 					"        raise err_message"
 				],
-				"execution_count": null
+				"execution_count": 1
 			}
 		]
 	}

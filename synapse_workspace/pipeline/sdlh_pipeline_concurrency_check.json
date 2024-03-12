@@ -23,6 +23,7 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
+					"method": "POST",
 					"url": {
 						"value": "@concat('https://', variables('VAR_SYNAPSE_WORKSPACE_NAME'), '.dev.azuresynapse.net/queryPipelineRuns?api-version=2020-12-01')",
 						"type": "Expression"
@@ -31,7 +32,6 @@
 						"referenceName": "AutoResolveIntegrationRuntime",
 						"type": "IntegrationRuntimeReference"
 					},
-					"method": "POST",
 					"body": {
 						"value": "{\n    \"lastUpdatedAfter\": \"@{getPastTime(1, 'Day')}\",\n    \"lastUpdatedBefore\": \"@{utcnow()}\",\n    \"filters\": [\n      {\n        \"operand\": \"PipelineName\",\n        \"operator\": \"Equals\",\n        \"values\": [\n          \"@{pipeline().parameters.PARAM_PIPELINE_NAME}\"\n        ]\n      },\n      {\n        \"operand\": \"Status\",\n        \"operator\": \"In\",\n        \"values\": [\n          \"InProgress\",\n          \"Queued\"\n        ]\n      }\n    ]\n  }",
 						"type": "Expression"
@@ -77,7 +77,7 @@
 									"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PARAM_PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.PARAM_TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
 									"type": "Expression"
 								},
-								"errorCode": "429"
+								"errorCode": "500"
 							}
 						},
 						{
@@ -95,60 +95,7 @@
 							"typeProperties": {
 								"storedProcedureName": "[ETL].[usp_InsertLog]",
 								"storedProcedureParameters": {
-									"COMPONENT_NAME": {
-										"value": "run_pipeline_concurrency_check",
-										"type": "String"
-									},
-									"DATABASE_NAME": {
-										"value": null,
-										"type": "String"
-									},
-									"DELETES": {
-										"value": null,
-										"type": "Int32"
-									},
-									"DURATION_SECONDS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"END_TIME": {
-										"value": null,
-										"type": "DateTime"
-									},
-									"ERROR_MESSAGE": {
-										"value": {
-											"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PARAM_PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.PARAM_TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"INCREMENTAL_KEY_VALUE": {
-										"value": null,
-										"type": "String"
-									},
-									"INSERTS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"OPERATION": {
-										"value": "Web Activity - Pipeline Concurrency",
-										"type": "String"
-									},
-									"PIPELINE_NAME": {
-										"value": {
-											"value": "@pipeline().Pipeline",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PIPELINE_RUN_ID": {
-										"value": {
-											"value": "@pipeline().RunId",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"SCHEMA_NAME": {
+									"SOURCE_TYPE": {
 										"value": null,
 										"type": "String"
 									},
@@ -156,26 +103,24 @@
 										"value": null,
 										"type": "String"
 									},
-									"START_TIME": {
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										},
-										"type": "DateTime"
+									"SOURCE_GROUPING_ID": {
+										"value": null,
+										"type": "Int32"
+									},
+									"OBJECT_NAME": {
+										"value": null,
+										"type": "String"
+									},
+									"DATABASE_NAME": {
+										"value": null,
+										"type": "String"
+									},
+									"SCHEMA_NAME": {
+										"value": null,
+										"type": "String"
 									},
 									"TABLE_NAME": {
 										"value": null,
-										"type": "String"
-									},
-									"TARGET_SYSTEM": {
-										"value": null,
-										"type": "String"
-									},
-									"TRIGGER_NAME": {
-										"value": {
-											"value": "@pipeline().parameters.PARAM_TRIGGER_NAME",
-											"type": "Expression"
-										},
 										"type": "String"
 									},
 									"TRIGGER_TIME": {
@@ -192,9 +137,16 @@
 										},
 										"type": "String"
 									},
-									"TRIGGERING_PIPELINE_NAME": {
+									"PIPELINE_RUN_ID": {
 										"value": {
-											"value": "@pipeline()?.TriggeredByPipelineName",
+											"value": "@pipeline().RunId",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PIPELINE_NAME": {
+										"value": {
+											"value": "@pipeline().Pipeline",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -206,9 +158,69 @@
 										},
 										"type": "String"
 									},
+									"TRIGGERING_PIPELINE_NAME": {
+										"value": {
+											"value": "@pipeline()?.TriggeredByPipelineName",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"OPERATION": {
+										"value": "Web Activity",
+										"type": "String"
+									},
+									"COMPONENT_NAME": {
+										"value": "run_pipeline_concurrency_check",
+										"type": "String"
+									},
+									"TARGET_SYSTEM": {
+										"value": null,
+										"type": "String"
+									},
+									"START_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
 									"UPDATES": {
 										"value": null,
 										"type": "Int32"
+									},
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@concat('Pipeline concurrency check resulted in a failure. There is already a pipeline ', pipeline().parameters.PARAM_PIPELINE_NAME, ', ran by the trigger ', pipeline().parameters.PARAM_TRIGGER_NAME, ', in the Synapse Workspace ',variables('VAR_SYNAPSE_WORKSPACE_NAME'), '. The pipeline has been stopped to prevent data quality issues.')",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"NEW_INCREMENTAL_KEY_VALUE": {
+										"value": null,
+										"type": "String"
+									},
+									"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+										"value": null,
+										"type": "String"
 									}
 								}
 							},
