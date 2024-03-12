@@ -323,7 +323,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
+										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",

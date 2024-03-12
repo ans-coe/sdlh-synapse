@@ -85,9 +85,12 @@
 									"referenceName": "sdlh_mysql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"TABLE_NAME": "NA",
 										"SOURCE_CONNECTION_STRING": {
 											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"TABLE_NAME": {
+											"value": "@item().TABLE_NAME",
 											"type": "Expression"
 										}
 									}
@@ -162,9 +165,12 @@
 									"referenceName": "sdlh_mysql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"TABLE_NAME": "NA",
 										"SOURCE_CONNECTION_STRING": {
 											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"TABLE_NAME": {
+											"value": "@item().TABLE_NAME",
 											"type": "Expression"
 										}
 									}
@@ -197,7 +203,7 @@
 								"source": {
 									"type": "MySqlSource",
 									"query": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CASE\n        WHEN COLUMN_NAME LIKE (' %') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        WHEN COLUMN_NAME LIKE ('% ') THEN REPLACE(LOWER(COLUMN_NAME), ' ', '')\n        ELSE REPLACE(LOWER(COLUMN_NAME), ' ', '_')\n    END AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.`',COLUMN_NAME,'`', ' AS ' , COLUMN_ALIAS) AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,GROUP_CONCAT(DISTINCT COLUMN_WITH_ALIAS) COLUMNS_META\n    ,GROUP_CONCAT(DISTINCT COLUMN_NAME) COLUMNS_LIST\n    ,REPLACE((SELECT\n        JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME', COLUMN_NAME, 'DATA_TYPE', DATA_TYPE, 'CHARACTER_MAXIMUM_LENGTH', CHARACTER_MAXIMUM_LENGTH))\n        FROM cte_col_with_alias),' ','') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(LOWER(COLUMN_NAME))), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.`',COLUMN_NAME,'`', ' AS ' , '`', COLUMN_ALIAS,'`') AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,GROUP_CONCAT(DISTINCT COLUMN_WITH_ALIAS) COLUMNS_META\n    ,GROUP_CONCAT(DISTINCT COLUMN_NAME) COLUMNS_LIST\n    ,REPLACE((SELECT\n        JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME', COLUMN_NAME, 'DATA_TYPE', DATA_TYPE, 'CHARACTER_MAXIMUM_LENGTH', CHARACTER_MAXIMUM_LENGTH))\n        FROM cte_col_with_alias),' ','') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.table_name",
 										"type": "Expression"
 									}
 								},
@@ -253,15 +259,19 @@
 										"type": "String"
 									},
 									"PARAM_SCHEMA_NAME": {
-										"value": {
-											"value": "@item().SCHEMA_NAME",
-											"type": "Expression"
-										},
+										"value": null,
 										"type": "String"
 									},
 									"PARAM_SOURCE_SYSTEM": {
 										"value": {
 											"value": "@item().SOURCE_SYSTEM",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SOURCE_TYPE": {
+										"value": {
+											"value": "@item().SOURCE_TYPE",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -297,7 +307,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
+										"value": "SELECT MAX([INFORMATION_SCHEMA]) AS [INFORMATION_SCHEMA]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [DATABASE_NAME] = '@{item().DATABASE_NAME}'\nAND [SCHEMA_NAME] = '@{item().SCHEMA_NAME}'\nAND [TABLE_NAME] = '@{item().TABLE_NAME}'\n",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -704,28 +714,32 @@
 							"typeProperties": {
 								"storedProcedureName": "[ETL].[usp_SQLUpdateColumns]",
 								"storedProcedureParameters": {
-									"DATABASE_NAME": {
+									"PARAM_DATABASE_NAME": {
 										"value": {
 											"value": "@item().DATABASE_NAME",
 											"type": "Expression"
 										},
 										"type": "String"
 									},
-									"SCHEMA_NAME": {
-										"value": {
-											"value": "@item().SCHEMA_NAME",
-											"type": "Expression"
-										},
+									"PARAM_SCHEMA_NAME": {
+										"value": null,
 										"type": "String"
 									},
-									"SOURCE_SYSTEM": {
+									"PARAM_SOURCE_SYSTEM": {
 										"value": {
 											"value": "@item().SOURCE_SYSTEM",
 											"type": "Expression"
 										},
 										"type": "String"
 									},
-									"TABLE_NAME": {
+									"PARAM_SOURCE_TYPE": {
+										"value": {
+											"value": "@item().SOURCE_TYPE",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_TABLE_NAME": {
 										"value": {
 											"value": "@item().TABLE_NAME",
 											"type": "Expression"
