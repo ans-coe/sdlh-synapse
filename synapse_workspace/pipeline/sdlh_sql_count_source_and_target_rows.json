@@ -171,7 +171,7 @@
 													"source": {
 														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
-															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
 															"type": "Expression"
 														},
 														"queryTimeout": "02:00:00",
@@ -407,7 +407,7 @@
 													"source": {
 														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
-															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
 															"type": "Expression"
 														},
 														"queryTimeout": "02:00:00",
@@ -640,7 +640,7 @@
 													"source": {
 														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
-															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
 															"type": "Expression"
 														},
 														"queryTimeout": "02:00:00",
@@ -874,7 +874,7 @@
 													"source": {
 														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
-															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
 															"type": "Expression"
 														},
 														"queryTimeout": "02:00:00",
@@ -1110,7 +1110,7 @@
 													"source": {
 														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
-															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
+															"value": "SELECT j.OBJECT_NAME, t.TABLE_NAME, t.SERVERLESS_SQL_POOL_DATABASE, t.SERVERLESS_SQL_POOL_SCHEMA\nFROM \n    (SELECT [LOAD_TYPE]\n        ,[SOURCE_SYSTEM]\n        ,[SOURCE_CONNECTION_STRING]\n        ,[DATABASE_NAME]\n        ,[SCHEMA_NAME]\n        ,[TABLE_NAME]\n        ,[SERVERLESS_SQL_POOL_DATABASE]\n        ,[SERVERLESS_SQL_POOL_SCHEMA]\n        ,[COLUMNS_META]\n        ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n        ,[PRIMARY_KEYS]\n    FROM [ETL].[SQLTableMetadata]) AS t\nLEFT JOIN ETL.JsonMetadata AS j ON j.OBJECT_NAME = t.OBJECT_NAME\nWHERE t.OBJECT_NAME = '@{item().OBJECT_NAME}'",
 															"type": "Expression"
 														},
 														"queryTimeout": "02:00:00",

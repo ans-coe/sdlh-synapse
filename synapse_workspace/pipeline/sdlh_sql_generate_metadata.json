@@ -388,8 +388,7 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().SCHEMA_NAME, '_',item().TABLE_NAME)",
-												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
@@ -575,8 +574,7 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@concat(replace(replace(replace(pipeline().parameters.PARAM_SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',item().DATABASE_NAME,'_',item().SCHEMA_NAME, '_',item().TABLE_NAME)",
-												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
