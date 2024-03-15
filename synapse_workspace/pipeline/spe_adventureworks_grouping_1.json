@@ -36,6 +36,10 @@
 						"PARAM_DEPLOY_ENRICHED_LAYER": {
 							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
 							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
 						}
 					}
 				}
@@ -66,6 +70,39 @@
 						}
 					}
 				}
+			},
+			{
+				"name": "sdlh_sql_count_source_and_target_rows",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "sdlh_sql_load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_sql_count_source_and_target_rows",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_IS_ENABLED": true,
+						"PARAM_SOURCE_GROUPING_ID_START": 1,
+						"PARAM_SOURCE_GROUPING_ID_END": 1
+					}
+				}
 			}
 		],
 		"parameters": {
@@ -82,6 +119,10 @@
 				"defaultValue": 1
 			},
 			"PARAM_DEPLOY_ENRICHED_LAYER": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_ENABLE_LAST_RUN_CHECK": {
 				"type": "bool",
 				"defaultValue": true
 			}

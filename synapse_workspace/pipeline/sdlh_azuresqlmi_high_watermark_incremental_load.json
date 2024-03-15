@@ -19,7 +19,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_', SCHEMA_NAME, '_',TABLE_NAME) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
