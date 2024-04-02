@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_azuresqlmi_full_load",
+	"name": "sdlh_azuresql_full_load",
 	"properties": {
 		"activities": [
 			{
@@ -132,7 +132,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"source": {
-														"type": "SqlMISource",
+														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
 															"value": "SELECT @{item().COLUMNS_META},\n    'I' as etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S",
 															"type": "Expression"
@@ -161,7 +161,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "sdlh_azuresqlmi_db_table",
+														"referenceName": "sdlh_azuresql_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -644,13 +644,13 @@
 												"userProperties": [],
 												"typeProperties": {
 													"source": {
-														"type": "SqlMISource",
+														"type": "AzureSqlSource",
 														"sqlReaderQuery": "SELECT CHANGE_TRACKING_CURRENT_VERSION() AS NEW_CHANGE_TRACKING_VALUE",
 														"queryTimeout": "02:00:00",
 														"partitionOption": "None"
 													},
 													"dataset": {
-														"referenceName": "sdlh_azuresqlmi_db_table",
+														"referenceName": "sdlh_azuresql_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -685,7 +685,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"source": {
-														"type": "SqlMISource",
+														"type": "AzureSqlSource",
 														"sqlReaderQuery": {
 															"value": "SELECT @{item().COLUMNS_META}\n    ,'I' as etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\n",
 															"type": "Expression"
@@ -714,7 +714,7 @@
 												},
 												"inputs": [
 													{
-														"referenceName": "sdlh_azuresqlmi_db_table",
+														"referenceName": "sdlh_azuresql_db_table",
 														"type": "DatasetReference",
 														"parameters": {
 															"SOURCE_CONNECTION_STRING": {
@@ -1436,7 +1436,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/Azure_SQL_MI/Support"
+			"name": "SDLH/Azure_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

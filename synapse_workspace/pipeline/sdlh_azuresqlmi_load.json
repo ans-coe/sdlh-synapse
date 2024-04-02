@@ -120,7 +120,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -222,7 +222,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "set_required_log_id",
+						"activity": "check_if_last_run_failed",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -316,7 +316,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -472,7 +472,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -574,7 +574,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "set_required_log_id",
+						"activity": "check_if_last_run_failed",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -668,7 +668,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -770,7 +770,7 @@
 				"type": "Lookup",
 				"dependsOn": [
 					{
-						"activity": "set_required_log_id",
+						"activity": "check_if_last_run_failed",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -852,7 +852,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -996,7 +996,7 @@
 										"type": "Expression"
 									},
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID, pipeline()?.TriggeredByPipelineRunId)",
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
 									}
 								}
@@ -1093,7 +1093,7 @@
 				}
 			},
 			{
-				"name": "update_etl_log_on_success_full_load",
+				"name": "update_etl_log_on_success",
 				"description": "Executes a stored procedure to update on success",
 				"type": "SqlServerStoredProcedure",
 				"dependsOn": [
@@ -1167,7 +1167,7 @@
 				"type": "IfCondition",
 				"dependsOn": [
 					{
-						"activity": "set_required_trigger_time",
+						"activity": "if_rerun_and_last_run_check_is_enabled",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -1181,7 +1181,7 @@
 					},
 					"ifFalseActivities": [
 						{
-							"name": "set_queue_name",
+							"name": "set_queue_name_new_run",
 							"description": "Uses RunId to generate an unique queue name to be used by all downstream activities.",
 							"type": "SetVariable",
 							"dependsOn": [],
@@ -1301,7 +1301,7 @@
 										},
 										"COMPONENT_NAME": {
 											"type": "String",
-											"value": "azuresqlmi_load_control"
+											"value": "sqlserver_load_control"
 										},
 										"TARGET_SYSTEM": {
 											"type": "String",
@@ -1366,7 +1366,7 @@
 							"type": "WebActivity",
 							"dependsOn": [
 								{
-									"activity": "set_queue_name",
+									"activity": "set_queue_name_new_run",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -1403,6 +1403,67 @@
 									"resource": "https://storage.azure.com/"
 								}
 							}
+						},
+						{
+							"name": "set_trigger_time_new_run",
+							"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGER_TIME",
+								"value": {
+									"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_log_id_new_run",
+							"description": "Sets required Metadata DB LOG_ID to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "create_log_entry",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_LOG_ID",
+								"value": {
+									"value": "@string(activity('create_log_entry').output.value[0].LOG_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_triggering_pipeline_run_id_new_run",
+							"description": "Sets required triggering pipeline run id to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGERING_PIPELINE_RUN_ID",
+								"value": {
+									"value": "@pipeline()?.TriggeredByPipelineRunId",
+									"type": "Expression"
+								}
+							}
 						}
 					],
 					"ifTrueActivities": [
@@ -1420,6 +1481,60 @@
 								"variableName": "VAR_QUEUE_NAME",
 								"value": {
 									"value": "@concat('etl-queue-', activity('lookup_last_triggering_pipeline_state').output.value[0].PIPELINE_RUN_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_trigger_time_use_previous_run",
+							"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGER_TIME",
+								"value": {
+									"value": "@activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGER_TIME",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_log_id_use_previous_run",
+							"description": "Sets required Metadata DB LOG_ID to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_LOG_ID",
+								"value": {
+									"value": "@string(activity('lookup_last_triggering_pipeline_state').output.value[0].LOG_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_triggering_pipeline_run_id_use_previous_run",
+							"description": "Sets required triggering pipeline run id to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGERING_PIPELINE_RUN_ID",
+								"value": {
+									"value": "@activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID",
 									"type": "Expression"
 								}
 							}
@@ -1573,56 +1688,6 @@
 						}
 					]
 				}
-			},
-			{
-				"name": "set_required_log_id",
-				"description": "Sets required Metadata DB LOG_ID to be used downstream",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "check_if_last_run_failed",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "VAR_LOG_ID",
-					"value": {
-						"value": "@string(if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].LOG_ID, activity('create_log_entry').output.value[0].LOG_ID))",
-						"type": "Expression"
-					}
-				}
-			},
-			{
-				"name": "set_required_trigger_time",
-				"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "if_rerun_and_last_run_check_is_enabled",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "VAR_TRIGGER_TIME",
-					"value": {
-						"value": "@if(equals(variables('VAR_LAST_RUN_STATE'),'Failed'), activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGER_TIME, convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time'))",
-						"type": "Expression"
-					}
-				}
 			}
 		],
 		"parameters": {
@@ -1657,6 +1722,9 @@
 				"type": "String"
 			},
 			"VAR_LOG_ID": {
+				"type": "String"
+			},
+			"VAR_TRIGGERING_PIPELINE_RUN_ID": {
 				"type": "String"
 			}
 		},

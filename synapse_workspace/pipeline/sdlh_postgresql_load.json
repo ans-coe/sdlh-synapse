@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_load",
+	"name": "sdlh_postgresql_load",
 	"properties": {
 		"activities": [
 			{
@@ -7,12 +7,6 @@
 				"description": "Deletes the temp queue created on the datalake storage account.",
 				"type": "WebActivity",
 				"dependsOn": [
-					{
-						"activity": "if_tables_change_tracking_update_required",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
 					{
 						"activity": "if_tables_watermark_update_required",
 						"dependencyConditions": [
@@ -59,12 +53,6 @@
 				"dependsOn": [
 					{
 						"activity": "if_tables_full_load_required",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
-						"activity": "if_tables_change_tracking_required",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -240,7 +228,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_GROUPING_ID]\n    ,[LOAD_TYPE]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND ( [LOAD_TYPE] = 'FULL_LOAD' OR ( [LOAD_TYPE] = 'CHANGE_TRACKING' AND [LAST_CHANGE_TRACKING_VALUE] IS NULL) )",
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_GROUPING_ID]\n    ,[LOAD_TYPE]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'FULL_LOAD'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -276,13 +264,13 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "execute_sdlh_sql_full_load",
+							"name": "execute_sdlh_postgresql_full_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "sdlh_sql_full_load",
+									"referenceName": "sdlh_postgresql_full_load",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -328,7 +316,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "execute_sdlh_sql_full_load",
+									"activity": "execute_sdlh_postgresql_full_load",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -362,7 +350,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@activity('execute_sdlh_sql_full_load').error?.message",
+											"value": "@activity('execute_sdlh_postgresql_full_load').error?.message",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -413,202 +401,6 @@
 				}
 			},
 			{
-				"name": "if_tables_change_tracking_required",
-				"description": "Check if there are any required tables before executing the corresponding pipeline.",
-				"type": "IfCondition",
-				"dependsOn": [
-					{
-						"activity": "lookup_tables_change_tracking",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"expression": {
-						"value": "@greater(activity('lookup_tables_change_tracking').output.count,0)",
-						"type": "Expression"
-					},
-					"ifTrueActivities": [
-						{
-							"name": "execute_sdlh_sql_change_tracking_load",
-							"type": "ExecutePipeline",
-							"dependsOn": [],
-							"userProperties": [],
-							"typeProperties": {
-								"pipeline": {
-									"referenceName": "sdlh_sql_change_tracking_incremental_load",
-									"type": "PipelineReference"
-								},
-								"waitOnCompletion": true,
-								"parameters": {
-									"PARAM_SOURCE_TYPE": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
-										"type": "Expression"
-									},
-									"PARAM_SOURCE_SYSTEM": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
-										"type": "Expression"
-									},
-									"PARAM_SOURCE_GROUPING_ID": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
-										"type": "Expression"
-									},
-									"PARAM_QUEUE_STORAGE_ACCOUNT": {
-										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
-										"type": "Expression"
-									},
-									"PARAM_QUEUE_NAME": {
-										"value": "@variables('VAR_QUEUE_NAME')",
-										"type": "Expression"
-									},
-									"PARAM_DATETIME": {
-										"value": "@variables('VAR_TRIGGER_TIME')",
-										"type": "Expression"
-									},
-									"PARAM_TRIGGERING_PIPELINE_NAME": {
-										"value": "@pipeline()?.TriggeredByPipelineName",
-										"type": "Expression"
-									},
-									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
-										"type": "Expression"
-									}
-								}
-							}
-						},
-						{
-							"name": "update_etl_log_on_failure_change_tracking",
-							"description": "Executes a stored procedure to update on failure.",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "execute_sdlh_sql_change_tracking_load",
-									"dependencyConditions": [
-										"Failed"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[ETL].[usp_UpdateLog]",
-								"storedProcedureParameters": {
-									"DELETES": {
-										"value": null,
-										"type": "Int32"
-									},
-									"DURATION_SECONDS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"END_TIME": {
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										},
-										"type": "DateTime"
-									},
-									"ERROR_MESSAGE": {
-										"value": {
-											"value": "@activity('execute_sdlh_sql_change_tracking_load').error?.message",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"LOG_ID": {
-										"value": {
-											"value": "@variables('VAR_LOG_ID')",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"INSERTS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"UPDATES": {
-										"value": null,
-										"type": "Int32"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "azure_sql_data_no_param_azir",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
-							"name": "fail_pipeline_change_tracking",
-							"type": "Fail",
-							"dependsOn": [
-								{
-									"activity": "update_etl_log_on_failure_change_tracking",
-									"dependencyConditions": [
-										"Completed"
-									]
-								}
-							],
-							"userProperties": [],
-							"typeProperties": {
-								"message": {
-									"value": "SDLH Failure",
-									"type": "Expression"
-								},
-								"errorCode": "500"
-							}
-						}
-					]
-				}
-			},
-			{
-				"name": "lookup_tables_change_tracking",
-				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is CHANGE_TRACKING and LAST_CHANGE_TRACKING_VALUE IS NOT NULL",
-				"type": "Lookup",
-				"dependsOn": [
-					{
-						"activity": "check_if_last_run_failed",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"source": {
-						"type": "AzureSqlSource",
-						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_GROUPING_ID]\n    ,[LOAD_TYPE]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CHANGE_TRACKING'\nAND [LAST_CHANGE_TRACKING_VALUE] IS NOT NULL",
-							"type": "Expression"
-						},
-						"queryTimeout": "02:00:00",
-						"partitionOption": "None"
-					},
-					"dataset": {
-						"referenceName": "sdlh_azuresql_db_metadata",
-						"type": "DatasetReference",
-						"parameters": {
-							"METADATA_TABLE_NAME": "NA"
-						}
-					},
-					"firstRowOnly": false
-				}
-			},
-			{
 				"name": "if_tables_watermark_required",
 				"description": "Check if there are any required tables before executing the corresponding pipeline.",
 				"type": "IfCondition",
@@ -628,13 +420,13 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "execute_sdlh_sql_high_watermark_load",
+							"name": "execute_sdlh_postgresql_high_watermark_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "sdlh_sql_high_watermark_incremental_load",
+									"referenceName": "sdlh_postgresql_high_watermark_incremental_load",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -680,7 +472,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "execute_sdlh_sql_high_watermark_load",
+									"activity": "execute_sdlh_postgresql_high_watermark_load",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -714,7 +506,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@activity('execute_sdlh_sql_high_watermark_load').error?.message",
+											"value": "@activity('execute_sdlh_postgresql_high_watermark_load').error?.message",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -802,150 +594,6 @@
 						}
 					},
 					"firstRowOnly": false
-				}
-			},
-			{
-				"name": "if_tables_change_tracking_update_required",
-				"description": "Check if there are any required tables before executing the corresponding pipeline.",
-				"type": "IfCondition",
-				"dependsOn": [
-					{
-						"activity": "if_enriched_is_required",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"userProperties": [],
-				"typeProperties": {
-					"expression": {
-						"value": "@or(greater(activity('lookup_tables_change_tracking').output.count,0),greater(activity('lookup_tables_full_load').output.count,0))\r\n",
-						"type": "Expression"
-					},
-					"ifTrueActivities": [
-						{
-							"name": "execute_sdlh_sql_change_tracking_update",
-							"type": "ExecutePipeline",
-							"dependsOn": [],
-							"userProperties": [],
-							"typeProperties": {
-								"pipeline": {
-									"referenceName": "sdlh_sql_change_tracking_update",
-									"type": "PipelineReference"
-								},
-								"waitOnCompletion": true,
-								"parameters": {
-									"PARAM_SOURCE_TYPE": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
-										"type": "Expression"
-									},
-									"PARAM_SOURCE_SYSTEM": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
-										"type": "Expression"
-									},
-									"PARAM_SOURCE_GROUPING_ID": {
-										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
-										"type": "Expression"
-									},
-									"PARAM_TRIGGERING_PIPELINE_NAME": {
-										"value": "@pipeline()?.TriggeredByPipelineName",
-										"type": "Expression"
-									},
-									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
-										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
-										"type": "Expression"
-									}
-								}
-							}
-						},
-						{
-							"name": "update_etl_log_on_failure_change_tracking_copy1",
-							"description": "Executes a stored procedure to update on failure.",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "execute_sdlh_sql_change_tracking_update",
-									"dependencyConditions": [
-										"Failed"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[ETL].[usp_UpdateLog]",
-								"storedProcedureParameters": {
-									"DELETES": {
-										"value": null,
-										"type": "Int32"
-									},
-									"DURATION_SECONDS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"END_TIME": {
-										"value": {
-											"value": "@utcnow()",
-											"type": "Expression"
-										},
-										"type": "DateTime"
-									},
-									"ERROR_MESSAGE": {
-										"value": {
-											"value": "@activity('execute_sdlh_sql_change_tracking_update').error?.message",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"LOG_ID": {
-										"value": {
-											"value": "@variables('VAR_LOG_ID')",
-											"type": "Expression"
-										},
-										"type": "Int32"
-									},
-									"INSERTS": {
-										"value": null,
-										"type": "Int32"
-									},
-									"UPDATES": {
-										"value": null,
-										"type": "Int32"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "azure_sql_data_no_param_azir",
-								"type": "LinkedServiceReference"
-							}
-						},
-						{
-							"name": "fail_pipeline_change_tracking_update",
-							"type": "Fail",
-							"dependsOn": [
-								{
-									"activity": "update_etl_log_on_failure_change_tracking_copy1",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"userProperties": [],
-							"typeProperties": {
-								"message": {
-									"value": "SDLH Failure",
-									"type": "Expression"
-								},
-								"errorCode": "500"
-							}
-						}
-					]
 				}
 			},
 			{
@@ -1099,12 +747,6 @@
 				"dependsOn": [
 					{
 						"activity": "if_tables_watermark_update_required",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					},
-					{
-						"activity": "if_tables_change_tracking_update_required",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -1301,7 +943,7 @@
 										},
 										"COMPONENT_NAME": {
 											"type": "String",
-											"value": "sqlserver_load_control"
+											"value": "postgresql_load_control"
 										},
 										"TARGET_SYSTEM": {
 											"type": "String",
@@ -1693,7 +1335,7 @@
 		"parameters": {
 			"PARAM_SOURCE_TYPE": {
 				"type": "string",
-				"defaultValue": "SQL_SERVER"
+				"defaultValue": "POSTGRE_SQL"
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
@@ -1729,7 +1371,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server"
+			"name": "SDLH/Postgre_SQL"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

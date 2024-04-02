@@ -49,7 +49,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "SqlMISource",
 									"sqlReaderQuery": {
 										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\n    ,NULLIF('@{activity('lookup_new_columns').output.firstRow.COLUMNS_META_CHANGE_TRACKING}', '') AS COLUMNS_META_CHANGE_TRACKING\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
 										"type": "Expression"
@@ -132,7 +132,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "SqlMISource",
 									"sqlReaderQuery": {
 										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')}) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,TABLE_SCHEMA AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,COLLATION_NAME\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'",
 										"type": "Expression"
@@ -212,7 +212,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "SqlMISource",
 									"sqlReaderQuery": {
 										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(LOWER(COLUMN_NAME))), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\n    ,CASE\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('CT.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        ELSE NULL\n    END AS COLUMN_WITH_ALIAS_CHANGE_TRACKING\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS_CHANGE_TRACKING AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META_CHANGE_TRACKING\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_LIST\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n    ),1,0,''), '&amp;', '&'), '&lt;', ''), '&gt;', '') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.TABLE_NAME",
 										"type": "Expression"
@@ -385,7 +385,8 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",
+												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
@@ -571,7 +572,8 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",
+												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
