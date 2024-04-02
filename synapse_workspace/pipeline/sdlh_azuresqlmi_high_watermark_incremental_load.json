@@ -69,9 +69,9 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "SqlMISource",
 									"sqlReaderQuery": {
-										"value": "SELECT MAX(@{item().WATERMARK_COLUMN}) AS NEW_WATERMARK_VALUE\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}]",
+										"value": "SELECT MAX([@{item().WATERMARK_COLUMN}]) AS NEW_WATERMARK_VALUE\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}]",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -432,9 +432,9 @@
 										"userProperties": [],
 										"typeProperties": {
 											"source": {
-												"type": "AzureSqlSource",
+												"type": "SqlMISource",
 												"sqlReaderQuery": {
-													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nWHERE @{item().WATERMARK_COLUMN} > '@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss')}'\nAND @{item().WATERMARK_COLUMN} <= '@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss')}'",
+													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nWHERE [@{item().WATERMARK_COLUMN}] > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND [@{item().WATERMARK_COLUMN}] <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
@@ -795,14 +795,14 @@
 													"NEW_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss')",
+															"value": "@formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
 															"type": "Expression"
 														}
 													},
 													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss')",
+															"value": "@formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
 															"type": "Expression"
 														}
 													}

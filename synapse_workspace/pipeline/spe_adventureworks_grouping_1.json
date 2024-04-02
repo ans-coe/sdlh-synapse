@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "sdlh_sql_load",
+				"name": "sdlh_sql_load_grouping_1",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
@@ -29,10 +29,7 @@
 							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
 							"type": "Expression"
 						},
-						"PARAM_SOURCE_GROUPING_ID": {
-							"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
-							"type": "Expression"
-						},
+						"PARAM_SOURCE_GROUPING_ID": 1,
 						"PARAM_DEPLOY_ENRICHED_LAYER": {
 							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
 							"type": "Expression"
@@ -72,11 +69,11 @@
 				}
 			},
 			{
-				"name": "sdlh_sql_count_source_and_target_rows",
+				"name": "sdlh_sql_count_rows_grouping_1",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "sdlh_sql_load",
+						"activity": "sdlh_sql_load_grouping_1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -103,6 +100,24 @@
 						"PARAM_SOURCE_GROUPING_ID_END": 1
 					}
 				}
+			},
+			{
+				"name": "adventurworks_curated",
+				"type": "ExecutePipeline",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
+				"dependsOn": [
+					{
+						"activity": "sdlh_sql_load_grouping_1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"waitOnCompletion": true
+				}
 			}
 		],
 		"parameters": {
@@ -113,10 +128,6 @@
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string",
 				"defaultValue": "AdventureWorks"
-			},
-			"PARAM_SOURCE_GROUPING_ID": {
-				"type": "int",
-				"defaultValue": 1
 			},
 			"PARAM_DEPLOY_ENRICHED_LAYER": {
 				"type": "bool",

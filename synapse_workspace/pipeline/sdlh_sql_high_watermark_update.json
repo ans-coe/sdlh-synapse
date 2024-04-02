@@ -38,7 +38,7 @@
 								"source": {
 									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
-										"value": "SELECT CAST(NEW_INCREMENTAL_KEY_VALUE AS DATETIME2) AS NEW_WATERMARK_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [OBJECT_NAME] = '@{item().OBJECT_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID}'",
+										"value": "SELECT MAX(CAST(NEW_INCREMENTAL_KEY_VALUE AS DATETIME2)) AS NEW_WATERMARK_VALUE\nFROM [ETL].[Log]\nWHERE [SOURCE_TYPE] = '@{item().SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{item().SOURCE_SYSTEM}'\nAND [OBJECT_NAME] = '@{item().OBJECT_NAME}'\nAND [TRIGGERING_PIPELINE_RUN_ID] = '@{pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID}'",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -279,7 +279,7 @@
 														"value": "@activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE",
 														"type": "Expression"
 													},
-													"type": "DateTime"
+													"type": "String"
 												},
 												"PARAM_SCHEMA_NAME": {
 													"value": {
@@ -481,7 +481,7 @@
 													"NEW_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss')\n",
+															"value": "@formatDateTime(activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')\n",
 															"type": "Expression"
 														}
 													},
@@ -525,7 +525,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,CASE\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MYSQL' THEN CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_',TABLE_NAME)\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MY_SQL' THEN CONCAT(REPLACE(REPLACE(REPLACE(SOURCE_SYSTEM,'.','_'), '-','_'), '\\', '_'), '_',DATABASE_NAME,'_',TABLE_NAME)\n        ELSE LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',SCHEMA_NAME,'_',TABLE_NAME),' ', ''))\n    END AS [OBJECT_NAME]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,CASE\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MYSQL' THEN LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',TABLE_NAME),' ', ''))\n        WHEN UPPER('@{pipeline().parameters.PARAM_SOURCE_TYPE}') = 'MY_SQL' THEN LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',TABLE_NAME),' ', ''))\n        ELSE LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',SCHEMA_NAME,'_',TABLE_NAME),' ', ''))\n    END AS [OBJECT_NAME]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",

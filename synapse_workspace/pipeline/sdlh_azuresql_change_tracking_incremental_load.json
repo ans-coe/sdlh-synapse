@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_change_tracking_incremental_load",
+	"name": "sdlh_azuresql_change_tracking_incremental_load",
 	"properties": {
 		"activities": [
 			{
@@ -143,7 +143,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
 										"value": "SELECT @{json(activity('lookup_object_metadata_change_tracking').output.firstRow.OBJECT_PARAMETERS)[0].COLUMNS_META_CHANGE_TRACKING}\n    ,SYS_CHANGE_OPERATION as etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nRIGHT OUTER JOIN CHANGETABLE(CHANGES [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}], @{activity('lookup_old_sys_change_version').output.firstRow.LAST_CHANGE_TRACKING_VALUE}) AS CT\n    ON @{json(activity('lookup_object_metadata_change_tracking').output.firstRow.OBJECT_PARAMETERS)[0].CHANGE_TRACKING_JOIN_CONDITION}\nWHERE CT.SYS_CHANGE_VERSION <= @{item().NEW_CHANGE_TRACKING_VALUE}",
 										"type": "Expression"
@@ -172,7 +172,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_sql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SOURCE_CONNECTION_STRING": {
@@ -622,7 +622,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
 										"value": "SELECT\n    (SELECT COUNT(*)\n    FROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\n    RIGHT OUTER JOIN CHANGETABLE(CHANGES [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}], @{activity('lookup_old_sys_change_version').output.firstRow.LAST_CHANGE_TRACKING_VALUE}) AS CT\n        ON @{activity('calculate_ct_condition').output.firstRow.CONDITIONS}\n    WHERE SYS_CHANGE_OPERATION = 'U' AND CT.SYS_CHANGE_VERSION <= @{item().NEW_CHANGE_TRACKING_VALUE}) AS UPDATES,\n    (SELECT COUNT(*)\n    FROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\n    RIGHT OUTER JOIN CHANGETABLE(CHANGES [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}], @{activity('lookup_old_sys_change_version').output.firstRow.LAST_CHANGE_TRACKING_VALUE}) AS CT\n        ON @{activity('calculate_ct_condition').output.firstRow.CONDITIONS}\n    WHERE SYS_CHANGE_OPERATION = 'I' and CT.SYS_CHANGE_VERSION <= @{item().NEW_CHANGE_TRACKING_VALUE}) AS INSERTS,\n    (SELECT COUNT(*)\n    FROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\n    RIGHT OUTER JOIN CHANGETABLE(CHANGES [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}], @{activity('lookup_old_sys_change_version').output.firstRow.LAST_CHANGE_TRACKING_VALUE}) AS CT\n        ON @{activity('calculate_ct_condition').output.firstRow.CONDITIONS}\n    WHERE SYS_CHANGE_OPERATION = 'D' and CT.SYS_CHANGE_VERSION <= @{item().NEW_CHANGE_TRACKING_VALUE}) AS DELETES",
 										"type": "Expression"
@@ -631,7 +631,7 @@
 									"partitionOption": "None"
 								},
 								"dataset": {
-									"referenceName": "sdlh_sql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SOURCE_CONNECTION_STRING": {
@@ -829,7 +829,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"source": {
-						"type": "SqlServerSource",
+						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
 							"value": "DECLARE @SOURCE_TYPE varchar(500) = '@{activity('lookup_tables_change_tracking').output.value[0].SOURCE_TYPE}'\nDECLARE @SOURCE_SYSTEM varchar(500) = '@{activity('lookup_tables_change_tracking').output.value[0].SOURCE_SYSTEM}'\nDECLARE @DATABASE_NAME varchar(500) = '@{activity('lookup_tables_change_tracking').output.value[0].DATABASE_NAME}'\nDECLARE @SOURCE_CONNECTION_STRING varchar(500)= '@{activity('lookup_tables_change_tracking').output.value[0].SOURCE_CONNECTION_STRING}'\n\nDECLARE @curTrackingVersion int = CHANGE_TRACKING_CURRENT_VERSION()\nDECLARE @prevTrackingVersion int = @{activity('lookup_tables_change_tracking').output.value[0].LAST_CHANGE_TRACKING_VALUE}\n\n\n-- Step 1\n-- Get a list of table with change tracking enabled\nDECLARE @trackedTables AS table (TABLE_NAME nvarchar(1000), SCHEMA_NAME nvarchar(1000));\nINSERT INTO @trackedTables (TABLE_NAME, SCHEMA_NAME)\nSELECT sys.tables.name as TABLE_NAME, SCHEMA_NAME(sys.tables.schema_id) AS SCHEMA_NAME\nFROM sys.change_tracking_tables\nJOIN sys.tables\n    ON tables.object_id = change_tracking_tables.object_id\n\n\n-- Step 2\n-- Table to store list of tables with changes, Min/Max tracking numbers and row counts\nDECLARE @changedTables AS table (TABLE_NAME nvarchar(1000), SCHEMA_NAME nvarchar(1000),MinVersionTable bigint,MaxVersionTable bigint,RecCnt bigint);\n\n-- For each table name in tracked tables\nDECLARE @tableName nvarchar(1000)\nDECLARE @schemaName nvarchar(1000)\nWHILE EXISTS(SELECT TOP 1 *\nFROM @trackedTables)\nBEGIN\n    -- Set the current table name\n    SET @tableName = (SELECT TOP 1 TABLE_NAME FROM @trackedTables ORDER BY TABLE_NAME ASC);\n    SET @schemaName = (SELECT TOP 1 SCHEMA_NAME FROM @trackedTables WHERE TABLE_NAME = @tableName);\n  \n    -- Determine if the table has changed since the previous version\n    DECLARE @sql nvarchar(250)\n    DECLARE @retVal bigint\n    DECLARE @minChg bigint\n    DECLARE @maxChg bigint\n\n    SET @sql = 'select @retVal = count(*), @minChg = min(Sys_Change_Version),@maxChg= max(Sys_Change_Version) from changetable(changes ' + @schemaName + '.' +\n        @tableName + ', ' + CAST(@prevTrackingVersion AS varchar) + ') as changedTable where Sys_Change_Version<='+ CAST(@curTrackingVersion AS varchar)\n \n    EXEC sp_executesql @sql, N'@retVal bigint output, @minChg bigint output, @maxChg bigint output', @retVal output,@minChg output,@maxChg output \n    IF @retVal > 0\n        BEGIN\n        INSERT INTO @changedTables (TABLE_NAME,SCHEMA_NAME,MinVersionTable,MaxVersionTable,RecCnt) SELECT @tableName, @schemaName,@minChg, @maxChg, @retVal\n  END\n\n  -- Delete the current table name\n  DELETE FROM @trackedTables WHERE TABLE_NAME = @tableName;\nEND\n\n\n-- Step 3 - In reality, this may more sense being part of the above loop, but works for demonstation purposes.\n--show output of change tracking - Shows all tables with records with Tracking Version numbers between intial parameters and a row count\nSELECT\n    LOWER(REPLACE(CONCAT(@SOURCE_TYPE,'_',@SOURCE_SYSTEM,'_',@DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS OBJECT_NAME,\n    @SOURCE_TYPE AS SOURCE_TYPE,\n    @SOURCE_SYSTEM AS SOURCE_SYSTEM,\n    @DATABASE_NAME AS DATABASE_NAME,\n    SCHEMA_NAME AS SCHEMA_NAME,\n    @SOURCE_CONNECTION_STRING AS SOURCE_CONNECTION_STRING,\n    TABLE_NAME,\n    MaxVersionTable AS NEW_CHANGE_TRACKING_VALUE\nFROM @changedTables;",
 							"type": "Expression"
@@ -838,7 +838,7 @@
 						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "sdlh_sql_db_table",
+						"referenceName": "sdlh_azuresql_db_table",
 						"type": "DatasetReference",
 						"parameters": {
 							"SOURCE_CONNECTION_STRING": {
@@ -908,7 +908,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Azure_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_high_watermark_incremental_load",
+	"name": "sdlh_mysql_high_watermark_incremental_load",
 	"properties": {
 		"activities": [
 			{
@@ -19,7 +19,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -54,44 +54,6 @@
 						"type": "Expression"
 					},
 					"activities": [
-						{
-							"name": "lookup_new_watermark_value",
-							"description": "Running a query against the table in the source system, to get the newest watermark datetime in the table.",
-							"type": "Lookup",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 2,
-								"retryIntervalInSeconds": 60,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "SqlServerSource",
-									"sqlReaderQuery": {
-										"value": "SELECT MAX([@{item().WATERMARK_COLUMN}]) AS NEW_WATERMARK_VALUE\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}]",
-										"type": "Expression"
-									},
-									"queryTimeout": "02:00:00",
-									"partitionOption": "None"
-								},
-								"dataset": {
-									"referenceName": "sdlh_sql_db_table",
-									"type": "DatasetReference",
-									"parameters": {
-										"SOURCE_CONNECTION_STRING": {
-											"value": "@item().SOURCE_CONNECTION_STRING",
-											"type": "Expression"
-										},
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA"
-									}
-								},
-								"firstRowOnly": true
-							}
-						},
 						{
 							"name": "lookup_object_metadata_watermark",
 							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
@@ -165,13 +127,13 @@
 							"type": "IfCondition",
 							"dependsOn": [
 								{
-									"activity": "lookup_new_watermark_value",
+									"activity": "lookup_object_metadata_watermark",
 									"dependencyConditions": [
 										"Succeeded"
 									]
 								},
 								{
-									"activity": "lookup_object_metadata_watermark",
+									"activity": "lookup_new_watermark_value",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -239,10 +201,7 @@
 													},
 													"SCHEMA_NAME": {
 														"type": "String",
-														"value": {
-															"value": "@item().SCHEMA_NAME",
-															"type": "Expression"
-														}
+														"value": null
 													},
 													"TABLE_NAME": {
 														"type": "String",
@@ -432,9 +391,9 @@
 										"userProperties": [],
 										"typeProperties": {
 											"source": {
-												"type": "SqlServerSource",
+												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
-													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nWHERE [@{item().WATERMARK_COLUMN}] > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND [@{item().WATERMARK_COLUMN}] <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
+													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM `@{item().TABLE_NAME}` S\nWHERE `@{item().WATERMARK_COLUMN}` > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND `@{item().WATERMARK_COLUMN}` <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
@@ -461,15 +420,11 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "sdlh_sql_db_table",
+												"referenceName": "sdlh_mysql_db_table",
 												"type": "DatasetReference",
 												"parameters": {
 													"SOURCE_CONNECTION_STRING": {
 														"value": "@item().SOURCE_CONNECTION_STRING",
-														"type": "Expression"
-													},
-													"SCHEMA_NAME": {
-														"value": "@item().SCHEMA_NAME",
 														"type": "Expression"
 													},
 													"TABLE_NAME": {
@@ -695,10 +650,7 @@
 													},
 													"SCHEMA_NAME": {
 														"type": "String",
-														"value": {
-															"value": "@item().SCHEMA_NAME",
-															"type": "Expression"
-														}
+														"value": null
 													},
 													"TABLE_NAME": {
 														"type": "String",
@@ -889,6 +841,41 @@
 									}
 								]
 							}
+						},
+						{
+							"name": "lookup_new_watermark_value",
+							"description": "Running a query against the table in the source system, to get the newest watermark datetime in the table.",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "MySqlSource",
+									"query": {
+										"value": "SELECT MAX(`@{item().WATERMARK_COLUMN}`) AS NEW_WATERMARK_VALUE\nFROM `@{item().TABLE_NAME}`",
+										"type": "Expression"
+									}
+								},
+								"dataset": {
+									"referenceName": "sdlh_mysql_db_table",
+									"type": "DatasetReference",
+									"parameters": {
+										"SOURCE_CONNECTION_STRING": {
+											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
 						}
 					]
 				}
@@ -921,7 +908,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/My_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

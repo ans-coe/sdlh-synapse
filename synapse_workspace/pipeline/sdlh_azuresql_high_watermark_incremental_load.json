@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_high_watermark_incremental_load",
+	"name": "sdlh_azuresql_high_watermark_incremental_load",
 	"properties": {
 		"activities": [
 			{
@@ -69,7 +69,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "SqlServerSource",
+									"type": "AzureSqlSource",
 									"sqlReaderQuery": {
 										"value": "SELECT MAX([@{item().WATERMARK_COLUMN}]) AS NEW_WATERMARK_VALUE\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}]",
 										"type": "Expression"
@@ -78,7 +78,7 @@
 									"partitionOption": "None"
 								},
 								"dataset": {
-									"referenceName": "sdlh_sql_db_table",
+									"referenceName": "sdlh_azuresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SOURCE_CONNECTION_STRING": {
@@ -432,7 +432,7 @@
 										"userProperties": [],
 										"typeProperties": {
 											"source": {
-												"type": "SqlServerSource",
+												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
 													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nWHERE [@{item().WATERMARK_COLUMN}] > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND [@{item().WATERMARK_COLUMN}] <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
 													"type": "Expression"
@@ -461,7 +461,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "sdlh_sql_db_table",
+												"referenceName": "sdlh_azuresql_db_table",
 												"type": "DatasetReference",
 												"parameters": {
 													"SOURCE_CONNECTION_STRING": {
@@ -921,7 +921,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Azure_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_load",
+	"name": "sdlh_azuresql_load",
 	"properties": {
 		"activities": [
 			{
@@ -276,13 +276,13 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "execute_sdlh_sql_full_load",
+							"name": "execute_sdlh_azuresql_full_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "sdlh_sql_full_load",
+									"referenceName": "sdlh_azuresql_full_load",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -328,7 +328,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "execute_sdlh_sql_full_load",
+									"activity": "execute_sdlh_azuresql_full_load",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -362,7 +362,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@activity('execute_sdlh_sql_full_load').error?.message",
+											"value": "@activity('execute_sdlh_azuresql_full_load').error?.message",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -432,13 +432,13 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "execute_sdlh_sql_change_tracking_load",
+							"name": "execute_sdlh_azuresql_change_tracking_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "sdlh_sql_change_tracking_incremental_load",
+									"referenceName": "sdlh_azuresql_change_tracking_incremental_load",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -484,7 +484,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "execute_sdlh_sql_change_tracking_load",
+									"activity": "execute_sdlh_azuresql_change_tracking_load",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -518,7 +518,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@activity('execute_sdlh_sql_change_tracking_load').error?.message",
+											"value": "@activity('execute_sdlh_azuresql_change_tracking_load').error?.message",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -628,13 +628,13 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "execute_sdlh_sql_high_watermark_load",
+							"name": "execute_sdlh_azuresql_high_watermark_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
-									"referenceName": "sdlh_sql_high_watermark_incremental_load",
+									"referenceName": "sdlh_azuresql_high_watermark_incremental_load",
 									"type": "PipelineReference"
 								},
 								"waitOnCompletion": true,
@@ -680,7 +680,7 @@
 							"type": "SqlServerStoredProcedure",
 							"dependsOn": [
 								{
-									"activity": "execute_sdlh_sql_high_watermark_load",
+									"activity": "execute_sdlh_azuresql_high_watermark_load",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -714,7 +714,7 @@
 									},
 									"ERROR_MESSAGE": {
 										"value": {
-											"value": "@activity('execute_sdlh_sql_high_watermark_load').error?.message",
+											"value": "@activity('execute_sdlh_azuresql_high_watermark_load').error?.message",
 											"type": "Expression"
 										},
 										"type": "String"
@@ -1693,7 +1693,7 @@
 		"parameters": {
 			"PARAM_SOURCE_TYPE": {
 				"type": "string",
-				"defaultValue": "SQL_SERVER"
+				"defaultValue": "AZURE_SQL"
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string"
@@ -1729,7 +1729,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server"
+			"name": "SDLH/Azure_SQL"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

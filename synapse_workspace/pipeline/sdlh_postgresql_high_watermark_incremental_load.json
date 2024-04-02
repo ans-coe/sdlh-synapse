@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_sql_high_watermark_incremental_load",
+	"name": "sdlh_postgresql_high_watermark_incremental_load",
 	"properties": {
 		"activities": [
 			{
@@ -54,44 +54,6 @@
 						"type": "Expression"
 					},
 					"activities": [
-						{
-							"name": "lookup_new_watermark_value",
-							"description": "Running a query against the table in the source system, to get the newest watermark datetime in the table.",
-							"type": "Lookup",
-							"dependsOn": [],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 2,
-								"retryIntervalInSeconds": 60,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"source": {
-									"type": "SqlServerSource",
-									"sqlReaderQuery": {
-										"value": "SELECT MAX([@{item().WATERMARK_COLUMN}]) AS NEW_WATERMARK_VALUE\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}]",
-										"type": "Expression"
-									},
-									"queryTimeout": "02:00:00",
-									"partitionOption": "None"
-								},
-								"dataset": {
-									"referenceName": "sdlh_sql_db_table",
-									"type": "DatasetReference",
-									"parameters": {
-										"SOURCE_CONNECTION_STRING": {
-											"value": "@item().SOURCE_CONNECTION_STRING",
-											"type": "Expression"
-										},
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA"
-									}
-								},
-								"firstRowOnly": true
-							}
-						},
 						{
 							"name": "lookup_object_metadata_watermark",
 							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
@@ -165,13 +127,13 @@
 							"type": "IfCondition",
 							"dependsOn": [
 								{
-									"activity": "lookup_new_watermark_value",
+									"activity": "lookup_object_metadata_watermark",
 									"dependencyConditions": [
 										"Succeeded"
 									]
 								},
 								{
-									"activity": "lookup_object_metadata_watermark",
+									"activity": "lookup_new_watermark_value",
 									"dependencyConditions": [
 										"Succeeded"
 									]
@@ -432,9 +394,9 @@
 										"userProperties": [],
 										"typeProperties": {
 											"source": {
-												"type": "SqlServerSource",
+												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
-													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM [@{item().SCHEMA_NAME}].[@{item().TABLE_NAME}] S\nWHERE [@{item().WATERMARK_COLUMN}] > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND [@{item().WATERMARK_COLUMN}] <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
+													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
@@ -461,7 +423,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "sdlh_sql_db_table",
+												"referenceName": "sdlh_postgresql_db_table",
 												"type": "DatasetReference",
 												"parameters": {
 													"SOURCE_CONNECTION_STRING": {
@@ -889,6 +851,42 @@
 									}
 								]
 							}
+						},
+						{
+							"name": "lookup_new_watermark_value",
+							"description": "Running a query against the table in the source system, to get the newest watermark datetime in the table.",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "PostgreSqlSource",
+									"query": {
+										"value": "SELECT MAX(\"@{item().WATERMARK_COLUMN}\") AS NEW_WATERMARK_VALUE\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\"",
+										"type": "Expression"
+									}
+								},
+								"dataset": {
+									"referenceName": "sdlh_postgresql_db_table",
+									"type": "DatasetReference",
+									"parameters": {
+										"SOURCE_CONNECTION_STRING": {
+											"value": "@item().SOURCE_CONNECTION_STRING",
+											"type": "Expression"
+										},
+										"SCHEMA_NAME": "NA",
+										"TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
 						}
 					]
 				}
@@ -921,7 +919,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server/Support"
+			"name": "SDLH/Postgre_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"
