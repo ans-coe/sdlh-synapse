@@ -1,0 +1,56 @@
+{
+	"name": "sdlh_salesforce_object",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "salesforce_sdlh_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"API_VERSION": {
+					"value": "@dataset().API_VERSION",
+					"type": "Expression"
+				},
+				"OUTH_CLIENT_ID": {
+					"value": "@dataset().OUTH_CLIENT_ID",
+					"type": "Expression"
+				},
+				"OUTH_CLIENT_SECRET_NAME": {
+					"value": "@dataset().OUTH_CLIENT_SECRET_NAME",
+					"type": "Expression"
+				},
+				"ENVIRONMENT_URL": {
+					"value": "@dataset().ENVIRONMENT_URL",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"API_VERSION": {
+				"type": "string"
+			},
+			"OUTH_CLIENT_ID": {
+				"type": "string"
+			},
+			"OUTH_CLIENT_SECRET_NAME": {
+				"type": "string"
+			},
+			"ENVIRONMENT_URL": {
+				"type": "string"
+			},
+			"OBJECT_NAME": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services"
+		},
+		"annotations": [],
+		"type": "SalesforceV2Object",
+		"schema": [],
+		"typeProperties": {
+			"objectApiName": {
+				"value": "@{dataset().OBJECT_NAME}",
+				"type": "Expression"
+			}
+		}
+	}
+}

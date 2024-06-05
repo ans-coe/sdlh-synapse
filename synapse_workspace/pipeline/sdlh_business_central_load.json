@@ -1,0 +1,1414 @@
+{
+	"name": "sdlh_business_central_load",
+	"properties": {
+		"activities": [
+			{
+				"name": "delete_storage_queue",
+				"description": "Deletes the temp queue created on the datalake storage account.",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "if_tables_watermark_update_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "DELETE",
+					"headers": {
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-version": "2021-04-10"
+					},
+					"url": {
+						"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_QUEUE_NAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": "NA",
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "if_enriched_is_required",
+				"description": "Check if enriching processes are passed in as true before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_tables_full_load_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "if_tables_watermark_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER,true)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_enriched_delta",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_enriched_delta_external_tables",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_STORAGE_QUEUE_NAME": {
+										"value": "@variables('VAR_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGER_TIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_NAME": {
+										"value": "@pipeline()?.TriggeredByPipelineName",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_notebook",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "execute_sdlh_enriched_delta",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('execute_sdlh_enriched_delta').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@variables('VAR_LOG_ID')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "fail_pipeline_notebook",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_failure_notebook",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "SDLH Failure",
+									"type": "Expression"
+								},
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_full_load",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is FULL_LOAD or CHANGE_TRACKING where LAST_CHANGE_TRACKING_VALUE IS NULL",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "check_if_last_run_failed",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_GROUPING_ID]\n    ,[LOAD_TYPE]\nFROM [ETL].[GenericTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'FULL_LOAD'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_tables_full_load_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_full_load",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_full_load').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_full_load",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_business_central_full_load",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_STORAGE_ACCOUNT": {
+										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_NAME": {
+										"value": "@variables('VAR_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_DATETIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_NAME": {
+										"value": "@pipeline()?.TriggeredByPipelineName",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
+										"type": "Expression"
+									},
+									"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+										"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+										"type": "Expression"
+									},
+									"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+										"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_full_load",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "execute_sdlh_full_load",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('execute_sdlh_full_load').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@variables('VAR_LOG_ID')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "fail_pipeline_full_load",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_failure_full_load",
+									"dependencyConditions": [
+										"Completed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "SDLH Failure",
+									"type": "Expression"
+								},
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "update_etl_log_on_success",
+				"description": "Executes a stored procedure to update on success",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "if_tables_watermark_update_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[ETL].[usp_UpdateLog]",
+					"storedProcedureParameters": {
+						"DELETES": {
+							"value": null,
+							"type": "Int32"
+						},
+						"DURATION_SECONDS": {
+							"value": null,
+							"type": "Int32"
+						},
+						"END_TIME": {
+							"value": {
+								"value": "@utcnow()",
+								"type": "Expression"
+							},
+							"type": "DateTime"
+						},
+						"ERROR_MESSAGE": {
+							"value": null,
+							"type": "String"
+						},
+						"LOG_ID": {
+							"value": {
+								"value": "@variables('VAR_LOG_ID')",
+								"type": "Expression"
+							},
+							"type": "Int32"
+						},
+						"INSERTS": {
+							"value": null,
+							"type": "Int32"
+						},
+						"UPDATES": {
+							"value": null,
+							"type": "Int32"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "azure_sql_data_no_param_azir",
+					"type": "LinkedServiceReference"
+				}
+			},
+			{
+				"name": "check_if_last_run_failed",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_rerun_and_last_run_check_is_enabled",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(variables('VAR_LAST_RUN_STATE'),'Failed')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "set_queue_name_new_run",
+							"description": "Uses RunId to generate an unique queue name to be used by all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_QUEUE_NAME",
+								"value": {
+									"value": "@concat('etl-queue-', pipeline().RunId)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "create_log_entry",
+							"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"OBJECT_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineRunId",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Control Pipeline"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "sqlserver_load_control"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": null
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": null
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "create_storage_queue",
+							"description": "Creates a temp queue on the datalake storage account.",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "set_queue_name_new_run",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "PUT",
+								"headers": {
+									"x-ms-date": {
+										"value": "@formatDateTime(utcnow(),'r')",
+										"type": "Expression"
+									},
+									"x-ms-version": "2021-04-10"
+								},
+								"url": {
+									"value": "@concat('https://', activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME, '.queue.core.windows.net/', variables('VAR_QUEUE_NAME'))",
+									"type": "Expression"
+								},
+								"connectVia": {
+									"referenceName": "AutoResolveIntegrationRuntime",
+									"type": "IntegrationRuntimeReference"
+								},
+								"body": "NA",
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://storage.azure.com/"
+								}
+							}
+						},
+						{
+							"name": "set_trigger_time_new_run",
+							"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGER_TIME",
+								"value": {
+									"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_log_id_new_run",
+							"description": "Sets required Metadata DB LOG_ID to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "create_log_entry",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_LOG_ID",
+								"value": {
+									"value": "@string(activity('create_log_entry').output.value[0].LOG_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_triggering_pipeline_run_id_new_run",
+							"description": "Sets required triggering pipeline run id to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGERING_PIPELINE_RUN_ID",
+								"value": {
+									"value": "@pipeline()?.TriggeredByPipelineRunId",
+									"type": "Expression"
+								}
+							}
+						}
+					],
+					"ifTrueActivities": [
+						{
+							"name": "set_queue_name_use_previous_run",
+							"description": "Uses RunId to generate an unique queue name to be used by all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_QUEUE_NAME",
+								"value": {
+									"value": "@concat('etl-queue-', activity('lookup_last_triggering_pipeline_state').output.value[0].PIPELINE_RUN_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_trigger_time_use_previous_run",
+							"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGER_TIME",
+								"value": {
+									"value": "@activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGER_TIME",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_log_id_use_previous_run",
+							"description": "Sets required Metadata DB LOG_ID to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_LOG_ID",
+								"value": {
+									"value": "@string(activity('lookup_last_triggering_pipeline_state').output.value[0].LOG_ID)",
+									"type": "Expression"
+								}
+							}
+						},
+						{
+							"name": "set_triggering_pipeline_run_id_use_previous_run",
+							"description": "Sets required triggering pipeline run id to be used downstream",
+							"type": "SetVariable",
+							"dependsOn": [],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_TRIGGERING_PIPELINE_RUN_ID",
+								"value": {
+									"value": "@activity('lookup_last_triggering_pipeline_state').output.value[0].TRIGGERING_PIPELINE_RUN_ID",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "if_rerun_and_last_run_check_is_enabled",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@and(not(equals(activity('lookup_pipeline_parameters').recoveryStatus,'None')), equals(pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK, true))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "lookup_last_triggering_pipeline_state",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_GetTriggeringPipelineLastRunState]",
+									"storedProcedureParameters": {
+										"PARAM_SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"PARAM_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"PARAM_TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "set_last_run_state",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "lookup_last_triggering_pipeline_state",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "VAR_LAST_RUN_STATE",
+								"value": {
+									"value": "@if(equals(activity('lookup_last_triggering_pipeline_state').output.count,0), 'FirstRun', activity('lookup_last_triggering_pipeline_state').output.value[0].LAST_TRIGGERING_PIPELINE_RUN_STATUS)",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "if_tables_watermark_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_watermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_watermark').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_high_watermark_load",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_business_central_high_watermark_incremental_load",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_STORAGE_ACCOUNT": {
+										"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+										"type": "Expression"
+									},
+									"PARAM_QUEUE_NAME": {
+										"value": "@variables('VAR_QUEUE_NAME')",
+										"type": "Expression"
+									},
+									"PARAM_DATETIME": {
+										"value": "@variables('VAR_TRIGGER_TIME')",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_NAME": {
+										"value": "@pipeline()?.TriggeredByPipelineName",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
+										"type": "Expression"
+									},
+									"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+										"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+										"type": "Expression"
+									},
+									"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+										"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_watermark",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "execute_sdlh_high_watermark_load",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('execute_sdlh_high_watermark_load').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@variables('VAR_LOG_ID')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "fail_pipeline_watermark",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_failure_watermark",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "SDLH Failure",
+									"type": "Expression"
+								},
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_tables_watermark",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is WATERMARK.  ( If LAST_WATERMARK_VALUE IS NULL it uses datetime value of '1900-01-01 00:00:00' to simulate a first run scenario )",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "check_if_last_run_failed",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_GROUPING_ID]\n    ,[LOAD_TYPE]\nFROM [ETL].[GenericTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'WATERMARK'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "if_tables_watermark_update_required",
+				"description": "Check if there are any required tables before executing the corresponding pipeline.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "if_enriched_is_required",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_tables_watermark').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "execute_sdlh_high_watermark_update",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "sdlh_generic_high_watermark_update",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"PARAM_SOURCE_TYPE": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_SYSTEM": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+										"type": "Expression"
+									},
+									"PARAM_SOURCE_GROUPING_ID": {
+										"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_NAME": {
+										"value": "@pipeline()?.TriggeredByPipelineName",
+										"type": "Expression"
+									},
+									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_watermark_update",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "execute_sdlh_high_watermark_update",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('execute_sdlh_high_watermark_update').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@variables('VAR_LOG_ID')",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "fail_pipeline_watermark_update",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_failure_watermark_update",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "SDLH Failure",
+									"type": "Expression"
+								},
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "BUSINESS_CENTRAL"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int",
+				"defaultValue": 1
+			},
+			"PARAM_DEPLOY_ENRICHED_LAYER": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_ENABLE_LAST_RUN_CHECK": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			},
+			"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"VAR_TRIGGER_TIME": {
+				"type": "String"
+			},
+			"VAR_LAST_RUN_STATE": {
+				"type": "String"
+			},
+			"VAR_QUEUE_NAME": {
+				"type": "String"
+			},
+			"VAR_LOG_ID": {
+				"type": "String"
+			},
+			"VAR_TRIGGERING_PIPELINE_RUN_ID": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services/Business_Central"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T16:57:45Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

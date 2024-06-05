@@ -1,0 +1,151 @@
+{
+	"name": "sdlh_salesforce_lookup_available_tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "lookup_available_tables",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "get_keyvault_secret_client_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SalesforceV2Source",
+						"SOQLQuery": {
+							"value": "SELECT QualifiedApiName\nFROM EntityDefinition\nORDER BY QualifiedApiName",
+							"type": "Expression"
+						},
+						"includeDeletedObjects": false
+					},
+					"dataset": {
+						"referenceName": "sdlh_salesforce_object",
+						"type": "DatasetReference",
+						"parameters": {
+							"API_VERSION": {
+								"value": "@pipeline().parameters.PARAM_API_VERSION",
+								"type": "Expression"
+							},
+							"OUTH_CLIENT_ID": {
+								"value": "@activity('get_keyvault_secret_client_id').output.value",
+								"type": "Expression"
+							},
+							"OUTH_CLIENT_SECRET_NAME": {
+								"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+								"type": "Expression"
+							},
+							"ENVIRONMENT_URL": {
+								"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+								"type": "Expression"
+							},
+							"OBJECT_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "get_keyvault_secret_client_id",
+				"description": "Used retrieve secret from key vault and secure the output",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI,'secrets/',pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME,'/?api-version=7.0')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			},
+			"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			},
+			"PARAM_API_VERSION": {
+				"type": "string"
+			},
+			"PARAM_ENVIRONMENT_URL": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services/Salesforce"
+		},
+		"annotations": []
+	}
+}

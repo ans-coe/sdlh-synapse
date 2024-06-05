@@ -1,0 +1,42 @@
+{
+	"name": "salesforce_sdlh_azir",
+	"properties": {
+		"parameters": {
+			"API_VERSION": {
+				"type": "string"
+			},
+			"OUTH_CLIENT_ID": {
+				"type": "string"
+			},
+			"OUTH_CLIENT_SECRET_NAME": {
+				"type": "string"
+			},
+			"ENVIRONMENT_URL": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "SalesforceV2",
+		"typeProperties": {
+			"environmentUrl": "@{linkedService().ENVIRONMENT_URL}",
+			"clientId": "@{linkedService().OUTH_CLIENT_ID}",
+			"clientSecret": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().OUTH_CLIENT_SECRET_NAME",
+					"type": "Expression"
+				}
+			},
+			"apiVersion": "@{linkedService().API_VERSION}",
+			"authenticationType": "OAuth2ClientCredential"
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

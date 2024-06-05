@@ -75,6 +75,9 @@
 							"name": "execute_sdlh_enriched_delta",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -267,6 +270,9 @@
 							"name": "execute_sdlh_mysql_full_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -423,6 +429,9 @@
 							"name": "execute_sdlh_mysql_high_watermark_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -619,6 +628,9 @@
 							"name": "execute_sdlh_sql_high_watermark_update",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -1371,7 +1383,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/My_SQL"
+			"name": "SDLH/SQL_Services/My_SQL"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

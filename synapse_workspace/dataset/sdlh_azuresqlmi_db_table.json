@@ -23,7 +23,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH"
+			"name": "SDLH/SQL_Services"
 		},
 		"annotations": [],
 		"type": "AzureSqlMITable",

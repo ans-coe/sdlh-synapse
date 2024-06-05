@@ -1,0 +1,72 @@
+{
+	"name": "sdlh_adls_parquet_folder_to_delta_upsert",
+	"properties": {
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_parquet_folder_snappy",
+						"type": "DatasetReference"
+					},
+					"name": "sourceParquetFolder"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "datalake_data_azir",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDelta"
+				}
+			],
+			"transformations": [
+				{
+					"name": "alterRowForUpsert"
+				},
+				{
+					"name": "derivedColumnETL"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     PARAM_PRIMARY_KEYS as string[],",
+				"     PARAM_SINK_FILE_SYSTEM as string,",
+				"     PARAM_SINK_FILE_PATH as string",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'parquet',",
+				"     partitionBy('hash', 1)) ~> sourceParquetFolder",
+				"derivedColumnETL alterRow(upsertIf(true()),",
+				"     partitionBy('hash', 1)) ~> alterRowForUpsert",
+				"sourceParquetFolder derive(etl_timestamp = currentTimestamp(),",
+				"     partitionBy('hash', 1)) ~> derivedColumnETL",
+				"alterRowForUpsert sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: ($PARAM_SINK_FILE_SYSTEM),",
+				"     folderPath: ($PARAM_SINK_FILE_PATH),",
+				"     mergeSchema: true,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: false,",
+				"     updateable: false,",
+				"     upsertable: true,",
+				"     keys:($PARAM_PRIMARY_KEYS),",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> sinkDelta"
+			]
+		}
+	}
+}

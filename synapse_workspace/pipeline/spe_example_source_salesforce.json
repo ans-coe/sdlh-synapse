@@ -1,0 +1,422 @@
+{
+	"name": "spe_example_source_salesforce",
+	"properties": {
+		"activities": [
+			{
+				"name": "sdlh_salesforce_load_grouping_1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 1,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "run_pipeline_concurrency_check",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_pipeline_concurrency_check",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_PIPELINE_NAME": {
+							"value": "@pipeline().Pipeline",
+							"type": "Expression"
+						},
+						"PARAM_PIPELINE_RUN_ID": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"PARAM_TRIGGER_NAME": {
+							"value": "@pipeline().TriggerName",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "sdlh_salesforce_load_grouping_2",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 2,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "sdlh_salesforce_load_grouping_3",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 3,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "sdlh_salesforce_load_grouping_4",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 4,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "sdlh_salesforce_load_grouping_5",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 5,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			},
+			{
+				"name": "sdlh_salesforce_load_grouping_6",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "run_pipeline_concurrency_check",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_salesforce_load",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_SOURCE_TYPE": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_SYSTEM": {
+							"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+							"type": "Expression"
+						},
+						"PARAM_SOURCE_GROUPING_ID": 6,
+						"PARAM_DEPLOY_ENRICHED_LAYER": {
+							"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+							"type": "Expression"
+						},
+						"PARAM_ENABLE_LAST_RUN_CHECK": {
+							"value": "@pipeline().parameters.PARAM_ENABLE_LAST_RUN_CHECK",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+							"value": "@pipeline().parameters.PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME",
+							"type": "Expression"
+						},
+						"PARAM_API_VERSION": {
+							"value": "@pipeline().parameters.PARAM_API_VERSION",
+							"type": "Expression"
+						},
+						"PARAM_ENVIRONMENT_URL": {
+							"value": "@pipeline().parameters.PARAM_ENVIRONMENT_URL",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "SALESFORCE"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"PARAM_DEPLOY_ENRICHED_LAYER": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_ENABLE_LAST_RUN_CHECK": {
+				"type": "bool",
+				"defaultValue": true
+			},
+			"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+				"type": "string",
+				"defaultValue": "salesforce-clientid"
+			},
+			"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+				"type": "string",
+				"defaultValue": "salesforce-clientsecret"
+			},
+			"PARAM_API_VERSION": {
+				"type": "string",
+				"defaultValue": "60.0"
+			},
+			"PARAM_ENVIRONMENT_URL": {
+				"type": "string",
+				"defaultValue": "https://example.my.salesforce.com/"
+			}
+		},
+		"folder": {
+			"name": "SDLH/_Example_Usage"
+		},
+		"annotations": []
+	}
+}

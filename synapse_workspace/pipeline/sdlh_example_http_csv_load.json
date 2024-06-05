@@ -1,0 +1,1214 @@
+{
+	"name": "sdlh_example_http_csv_load",
+	"properties": {
+		"activities": [
+			{
+				"name": "lookup_etl_metadata",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_TYPE & SOURCE_SYSTEM",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[TABLE_NAME]\n    ,[COLUMNS_LIST]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[PRIMARY_KEYS]\n    ,[LOAD_TYPE]\n    ,[SERVERLESS_SQL_POOL_DATABASE]\n    ,[SERVERLESS_SQL_POOL_SCHEMA]\n    ,[CUSTOM_FIELD_1]\n    ,[CUSTOM_FIELD_2]\n    ,[CUSTOM_FIELD_3]\n    ,[CUSTOM_FIELD_4]\n    ,[CUSTOM_FIELD_5]\n    ,[CUSTOM_FIELD_6]\n    ,[CUSTOM_FIELD_7]\n    ,[CUSTOM_FIELD_8]\nFROM [ETL].[GenericTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "for_each_etl_metadata",
+				"description": "This for loop iterates through the each required item and loads required metadata into the Metadata DB.  Tables included are ETLGenericColumnMetadata & ETL.GenericTableMetadata & ETL.JsonMetadata",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lookup_etl_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "get_keyvault_secret",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "set_trigger_time_new_run",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_etl_metadata').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "copy_to_parquet_raw",
+							"description": "Copy activity that takes source tables and writes them as Parquet in the RAW hierarchical namespace within ADLS.",
+							"type": "Copy",
+							"dependsOn": [
+								{
+									"activity": "create_log_entry_copy",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "DelimitedTextSource",
+									"storeSettings": {
+										"type": "HttpReadSettings",
+										"requestMethod": "GET"
+									},
+									"formatSettings": {
+										"type": "DelimitedTextReadSettings"
+									}
+								},
+								"sink": {
+									"type": "ParquetSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "ParquetWriteSettings"
+									}
+								},
+								"enableStaging": false,
+								"translator": {
+									"type": "TabularTranslator",
+									"typeConversion": true,
+									"typeConversionSettings": {
+										"allowDataTruncation": true,
+										"treatBooleanAsNumber": false
+									}
+								}
+							},
+							"inputs": [
+								{
+									"referenceName": "sdlh_http_anonymous_csv_comma_escape_double_quote",
+									"type": "DatasetReference",
+									"parameters": {
+										"BASE_URL": {
+											"value": "@pipeline().parameters.PARAM_BASE_URL",
+											"type": "Expression"
+										},
+										"RELATIVE_URL": {
+											"value": "@concat('csv?uri=list/metricTypes')",
+											"type": "Expression"
+										}
+									}
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "sdlh_gen2_parquet_snappy",
+									"type": "DatasetReference",
+									"parameters": {
+										"FP0": {
+											"value": "@json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+											"type": "Expression"
+										},
+										"FP1": {
+											"value": "@concat(json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata').output.firstRow.HNS)",
+											"type": "Expression"
+										},
+										"OBJECT_NAME": {
+											"value": "@json(activity('lookup_object_metadata').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						},
+						{
+							"name": "upsert_parquet_to_delta",
+							"type": "ExecuteDataFlow",
+							"dependsOn": [
+								{
+									"activity": "create_log_entry_dataflow",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataflow": {
+									"referenceName": "sdlh_adls_parquet_folder_to_delta_upsert",
+									"type": "DataFlowReference",
+									"parameters": {
+										"PARAM_PRIMARY_KEYS": {
+											"value": "@concat('[''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), ''']')",
+											"type": "Expression"
+										},
+										"PARAM_SINK_FILE_SYSTEM": {
+											"value": "'@{json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].staged[0].FP0}'",
+											"type": "Expression"
+										},
+										"PARAM_SINK_FILE_PATH": {
+											"value": "'@{json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].staged[0].FP1}'",
+											"type": "Expression"
+										}
+									},
+									"datasetParameters": {
+										"sourceParquetFolder": {
+											"FP0": {
+												"value": "@json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+												"type": "Expression"
+											},
+											"FP1": {
+												"value": "@concat(json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata').output.firstRow.HNS)",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								"compute": {
+									"coreCount": 8,
+									"computeType": "General"
+								},
+								"traceLevel": "Fine"
+							}
+						},
+						{
+							"name": "create_log_entry_copy",
+							"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "lookup_object_metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"OBJECT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().TABLE_NAME),' ' ,''))",
+												"type": "Expression"
+											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().TABLE_NAME",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineRunId",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Copy Activity"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@toLower(concat('copy_',pipeline().parameters.PARAM_SOURCE_TYPE,'_to_raw'))",
+												"type": "Expression"
+											}
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "ADLS_RAW"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": null
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "update_etl_log_on_success_copy",
+							"description": "Executes a stored procedure to update on success",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "copy_to_parquet_raw",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": {
+											"value": "@activity('copy_to_parquet_raw').output.copyDuration",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": null,
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_copy').output.value[0].LOG_ID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": {
+											"value": "@activity('copy_to_parquet_raw').output.rowsCopied",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_copy",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "copy_to_parquet_raw",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('copy_to_parquet_raw').output.errors[0].Message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_copy').output.value[0].LOG_ID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "lookup_object_metadata",
+							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineMetadataRetrieval]",
+									"storedProcedureParameters": {
+										"PARAM_DATETIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@variables('VAR_TRIGGER_TIME')",
+												"type": "Expression"
+											}
+										},
+										"PARAM_OBJECT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().OBJECT_NAME",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "create_external_tables",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "lookup_generic_column_metadata",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[Config].[usp_CreateExternalTable]",
+								"storedProcedureParameters": {
+									"PARAM_ADLS_LOCATION_PATH": {
+										"value": {
+											"value": "@json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].staged[0].FP1",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_EXTERNAL_DATA_SOURCE": {
+										"value": "exds_gen2_enriched",
+										"type": "String"
+									},
+									"PARAM_EXTERNAL_FILE_FORMAT": {
+										"value": "exff_delta",
+										"type": "String"
+									},
+									"PARAM_OUTPUT_SCHEMA_NAME": {
+										"value": {
+											"value": "@item().SERVERLESS_SQL_POOL_SCHEMA",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_OUTPUT_TABLE_NAME": {
+										"value": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SERVERLESS_SQL_DATABASE": {
+										"value": {
+											"value": "@item().SERVERLESS_SQL_POOL_DATABASE",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SQL_QUERY": {
+										"value": {
+											"value": "@activity('lookup_generic_column_metadata').output.firstRow.COLUMNS_TO_CREATE",
+											"type": "Expression"
+										},
+										"type": "String"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "synapse_sql_serverless_azir",
+								"type": "LinkedServiceReference",
+								"parameters": {
+									"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+								}
+							}
+						},
+						{
+							"name": "lookup_generic_column_metadata",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "upsert_parquet_to_delta",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "WITH cte_update AS (\nSELECT\n\t[TABLE_NAME]\n    ,CONCAT('[',REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(COLUMN_NAME)), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', ''''''),'] ') AS [COLUMN_NAME]\n    ,CASE\n\t\tWHEN [DATA_TYPE] = 'nvarchar' THEN 'varchar'\n\t\tELSE [DATA_TYPE]\n\tEND AS [DATA_TYPE]\n    ,CASE\n        WHEN CAST([CHARACTER_MAXIMUM_LENGTH] AS VARCHAR(250)) = '-1' THEN 'MAX'\n\t\tWHEN CAST([CHARACTER_MAXIMUM_LENGTH] AS VARCHAR(250)) = '-4000' THEN '8000'\n\t\tWHEN CAST([CHARACTER_MAXIMUM_LENGTH] AS VARCHAR(250)) IS NULL THEN '8000'\n        ELSE CAST([CHARACTER_MAXIMUM_LENGTH] AS VARCHAR(250))\n    END AS [CHARACTER_MAXIMUM_LENGTH]\nFROM [ETL].[GenericColumnMetadata]\n),\n\ncte_final AS (\nSELECT\n\t[TABLE_NAME]\n\t,[COLUMN_NAME]\n    ,[DATA_TYPE]\n    ,[CHARACTER_MAXIMUM_LENGTH]\n\t,CASE\n\t\tWHEN [DATA_TYPE] = 'varchar' THEN CONCAT([COLUMN_NAME],[DATA_TYPE],'(',[CHARACTER_MAXIMUM_LENGTH],')')\n\t\tELSE CONCAT([COLUMN_NAME],[DATA_TYPE])\n\tEND AS [CONCAT_TABLE]\nFROM cte_update\n)\n\nSELECT\n    CONCAT(STUFF((\n        SELECT ',' +[CONCAT_TABLE]\n        FROM cte_final AS innerTable\n        WHERE innerTable.TABLE_NAME = T.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''),',[etl_timestamp] datetime2(7)') AS [COLUMNS_TO_CREATE]\nFROM [ETL].[GenericColumnMetadata] AS T\nWHERE T.TABLE_NAME = '@{item().TABLE_NAME}'\nGROUP BY T.TABLE_NAME",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "create_log_entry_dataflow",
+							"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "copy_to_parquet_raw",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+									"storedProcedureParameters": {
+										"SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"OBJECT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().TABLE_NAME),' ' ,''))",
+												"type": "Expression"
+											}
+										},
+										"DATABASE_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"SCHEMA_NAME": {
+											"type": "String",
+											"value": null
+										},
+										"TABLE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@item().TABLE_NAME",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().TriggerTime",
+												"type": "Expression"
+											}
+										},
+										"TRIGGER_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().TriggerType",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().RunId",
+												"type": "Expression"
+											}
+										},
+										"PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().Pipeline",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_RUN_ID": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineRunId",
+												"type": "Expression"
+											}
+										},
+										"TRIGGERING_PIPELINE_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											}
+										},
+										"OPERATION": {
+											"type": "String",
+											"value": "Data Flow"
+										},
+										"COMPONENT_NAME": {
+											"type": "String",
+											"value": "copy_to_enriched_delta"
+										},
+										"TARGET_SYSTEM": {
+											"type": "String",
+											"value": "ADLS_Delta"
+										},
+										"START_TIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@utcnow()",
+												"type": "Expression"
+											}
+										},
+										"END_TIME": {
+											"type": "DateTime",
+											"value": null
+										},
+										"DURATION_SECONDS": {
+											"type": "Int32",
+											"value": null
+										},
+										"INSERTS": {
+											"type": "Int32",
+											"value": null
+										},
+										"UPDATES": {
+											"type": "Int32",
+											"value": null
+										},
+										"DELETES": {
+											"type": "Int32",
+											"value": null
+										},
+										"ERROR_MESSAGE": {
+											"type": "String",
+											"value": null
+										},
+										"NEW_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										},
+										"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+											"type": "String",
+											"value": null
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": false
+							}
+						},
+						{
+							"name": "update_etl_log_on_success_data_flow",
+							"description": "Executes a stored procedure to update on success",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "upsert_parquet_to_delta",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": null,
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_dataflow').output.value[0].LOG_ID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": {
+											"value": "@activity('upsert_parquet_to_delta').output.runStatus.metrics.sinkDelta.rowsWritten",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_data_flow",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "upsert_parquet_to_delta",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('upsert_parquet_to_delta').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_dataflow').output.value[0].LOG_ID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						},
+						{
+							"name": "update_etl_log_on_failure_copy_try2",
+							"description": "Executes a stored procedure to update on failure.",
+							"type": "SqlServerStoredProcedure",
+							"dependsOn": [
+								{
+									"activity": "update_etl_log_on_failure_copy",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"storedProcedureName": "[ETL].[usp_UpdateLog]",
+								"storedProcedureParameters": {
+									"DELETES": {
+										"value": null,
+										"type": "Int32"
+									},
+									"DURATION_SECONDS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"END_TIME": {
+										"value": {
+											"value": "@utcnow()",
+											"type": "Expression"
+										},
+										"type": "DateTime"
+									},
+									"ERROR_MESSAGE": {
+										"value": {
+											"value": "@activity('copy_to_parquet_raw').error?.message",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"LOG_ID": {
+										"value": {
+											"value": "@activity('create_log_entry_copy').output.value[0].LOG_ID",
+											"type": "Expression"
+										},
+										"type": "Int32"
+									},
+									"INSERTS": {
+										"value": null,
+										"type": "Int32"
+									},
+									"UPDATES": {
+										"value": null,
+										"type": "Int32"
+									}
+								}
+							},
+							"linkedServiceName": {
+								"referenceName": "azure_sql_data_no_param_azir",
+								"type": "LinkedServiceReference"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "get_keyvault_secret",
+				"description": "Used retrieve secret from key vault and secure the output",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": true,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI,'secrets/',pipeline().parameters.PARAM_KEYVAULT_SECRET_NAME,'/?api-version=7.0')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "set_trigger_time_new_run",
+				"description": "Set as datetime, setting as variable means it will be constant across all downstream activities.",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_TRIGGER_TIME",
+					"value": {
+						"value": "@convertFromUtc(pipeline().TriggerTime, 'GMT Standard Time')",
+						"type": "Expression"
+					}
+				}
+			}
+		],
+		"concurrency": 50,
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "HTTP"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string",
+				"defaultValue": "LG_Infrom_Plus"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "string",
+				"defaultValue": "1"
+			},
+			"PARAM_BASE_URL": {
+				"type": "string",
+				"defaultValue": "https://standards.esd.org.uk/"
+			},
+			"PARAM_KEYVAULT_SECRET_NAME": {
+				"type": "string",
+				"defaultValue": "http-test-token"
+			}
+		},
+		"variables": {
+			"VAR_TRIGGER_TIME": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services/HTTP/_Examples_Clone_If_Using"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-07-25T15:14:09Z"
+	},
+	"type": "Microsoft.Synapse/workspaces/pipelines"
+}

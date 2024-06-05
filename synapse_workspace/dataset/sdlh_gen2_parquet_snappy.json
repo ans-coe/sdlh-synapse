@@ -17,7 +17,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH"
+			"name": "SDLH/Common"
 		},
 		"annotations": [],
 		"type": "Parquet",

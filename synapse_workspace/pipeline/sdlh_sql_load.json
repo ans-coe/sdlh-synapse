@@ -87,6 +87,9 @@
 							"name": "execute_sdlh_enriched_delta",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -279,6 +282,9 @@
 							"name": "execute_sdlh_sql_full_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -435,6 +441,9 @@
 							"name": "execute_sdlh_sql_change_tracking_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -631,6 +640,9 @@
 							"name": "execute_sdlh_sql_high_watermark_load",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -827,6 +839,9 @@
 							"name": "execute_sdlh_sql_change_tracking_update",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -971,6 +986,9 @@
 							"name": "execute_sdlh_sql_high_watermark_update",
 							"type": "ExecutePipeline",
 							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
 							"userProperties": [],
 							"typeProperties": {
 								"pipeline": {
@@ -1729,7 +1747,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server"
+			"name": "SDLH/SQL_Services/SQL_Server"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

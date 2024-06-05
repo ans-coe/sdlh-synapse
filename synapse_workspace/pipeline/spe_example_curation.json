@@ -1,0 +1,78 @@
+{
+	"name": "spe_example_curation",
+	"properties": {
+		"activities": [
+			{
+				"name": "sdlh_curated_grouping_1_priority_1",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_curation_create_external_table_via_query",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_CURATION_GROUPING_ID": "1",
+						"PARAM_CURATION_GROUPING_PRIORITY": "1"
+					}
+				}
+			},
+			{
+				"name": "sdlh_curated_grouping_2_priority_1",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_curation_create_external_table_via_query",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_CURATION_GROUPING_ID": "2",
+						"PARAM_CURATION_GROUPING_PRIORITY": "1"
+					}
+				}
+			},
+			{
+				"name": "sdlh_curated_grouping_2_priority_2",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "sdlh_curated_grouping_2_priority_1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "sdlh_curation_create_external_table_via_query",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_CURATION_GROUPING_ID": "2",
+						"PARAM_CURATION_GROUPING_PRIORITY": "1"
+					}
+				}
+			}
+		],
+		"folder": {
+			"name": "SDLH/_Example_Usage"
+		},
+		"annotations": []
+	}
+}

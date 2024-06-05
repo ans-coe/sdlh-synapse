@@ -1,0 +1,42 @@
+{
+	"name": "sdlh_http_anonymous_csv_comma_defaults",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "http_anonymous_sdlh_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"BASE_URL": {
+					"value": "@dataset().BASE_URL",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"BASE_URL": {
+				"type": "string"
+			},
+			"RELATIVE_URL": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "HttpServerLocation",
+				"relativeUrl": {
+					"value": "@dataset().RELATIVE_URL",
+					"type": "Expression"
+				}
+			},
+			"columnDelimiter": ",",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": []
+	}
+}
