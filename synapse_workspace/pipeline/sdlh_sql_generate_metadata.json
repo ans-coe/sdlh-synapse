@@ -388,7 +388,8 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",
+												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
@@ -574,7 +575,8 @@
 										"OBJECT_NAME": {
 											"type": "String",
 											"value": {
-												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",												"type": "Expression"
+												"value": "@toLower(replace(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_',pipeline().parameters.PARAM_SOURCE_SYSTEM,'_',item().DATABASE_NAME,'_',item().SCHEMA_NAME,'_',item().TABLE_NAME),' ', ''))",
+												"type": "Expression"
 											}
 										},
 										"DATABASE_NAME": {
@@ -925,6 +927,9 @@
 				"state": "Inactive",
 				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -954,7 +959,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/SQL_Server"
+			"name": "SDLH/SQL_Services/SQL_Server"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-07-25T15:14:09Z"

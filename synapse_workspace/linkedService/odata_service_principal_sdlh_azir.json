@@ -1,0 +1,48 @@
+{
+	"name": "odata_service_principal_sdlh_azir",
+	"properties": {
+		"description": "Added as part of ANS SDLH deployment",
+		"parameters": {
+			"SERVICE_URL": {
+				"type": "string"
+			},
+			"ENTRA_RESOURCE_ID": {
+				"type": "string"
+			},
+			"TENANT_ID": {
+				"type": "string"
+			},
+			"CLIENT_ID": {
+				"type": "string"
+			},
+			"CLIENT_SECRET_NAME": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "OData",
+		"typeProperties": {
+			"url": "@{linkedService().SERVICE_URL}",
+			"authenticationType": "AadServicePrincipal",
+			"tenant": "@{linkedService().TENANT_ID}",
+			"aadResourceId": "@{linkedService().ENTRA_RESOURCE_ID}",
+			"aadServicePrincipalCredentialType": "ServicePrincipalKey",
+			"servicePrincipalId": "@{linkedService().CLIENT_ID}",
+			"servicePrincipalKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().CLIENT_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

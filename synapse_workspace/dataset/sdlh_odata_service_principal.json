@@ -1,0 +1,63 @@
+{
+	"name": "sdlh_odata_service_principal",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "odata_service_principal_sdlh_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"SERVICE_URL": {
+					"value": "@dataset().SERVICE_URL",
+					"type": "Expression"
+				},
+				"ENTRA_RESOURCE_ID": {
+					"value": "@dataset().ENTRA_RESOURCE_ID",
+					"type": "Expression"
+				},
+				"TENANT_ID": {
+					"value": "@dataset().TENANT_ID",
+					"type": "Expression"
+				},
+				"CLIENT_ID": {
+					"value": "@dataset().CLIENT_ID",
+					"type": "Expression"
+				},
+				"CLIENT_SECRET_NAME": {
+					"value": "@dataset().CLIENT_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"SERVICE_URL": {
+				"type": "string"
+			},
+			"ENTRA_RESOURCE_ID": {
+				"type": "string"
+			},
+			"TENANT_ID": {
+				"type": "string"
+			},
+			"CLIENT_ID": {
+				"type": "string"
+			},
+			"CLIENT_SECRET_NAME": {
+				"type": "string"
+			},
+			"PATH_URL": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services"
+		},
+		"annotations": [],
+		"type": "ODataResource",
+		"schema": [],
+		"typeProperties": {
+			"path": {
+				"value": "@dataset().PATH_URL",
+				"type": "Expression"
+			}
+		}
+	}
+}

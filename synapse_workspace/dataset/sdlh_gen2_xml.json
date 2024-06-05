@@ -1,0 +1,43 @@
+{
+	"name": "sdlh_gen2_xml",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "datalake_data_azir",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FILE_SYSTEM": {
+				"type": "string",
+				"defaultValue": "metadata"
+			},
+			"DIRECTORY": {
+				"type": "string"
+			},
+			"FILE_NAME": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"annotations": [],
+		"type": "Xml",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().FILE_NAME",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().DIRECTORY",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().FILE_SYSTEM",
+					"type": "Expression"
+				}
+			}
+		}
+	}
+}

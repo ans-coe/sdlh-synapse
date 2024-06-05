@@ -1,0 +1,66 @@
+{
+	"name": "sdlh_adls_parquet_folder_to_delta_trunc_load",
+	"properties": {
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_parquet_folder_snappy",
+						"type": "DatasetReference"
+					},
+					"name": "sourceParquetFolder"
+				}
+			],
+			"sinks": [
+				{
+					"linkedService": {
+						"referenceName": "datalake_data_azir",
+						"type": "LinkedServiceReference"
+					},
+					"name": "sinkDelta"
+				}
+			],
+			"transformations": [
+				{
+					"name": "derivedColumnETL"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     PARAM_SINK_FILE_SYSTEM as string,",
+				"     PARAM_SINK_FILE_PATH as string",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'parquet',",
+				"     partitionBy('hash', 1)) ~> sourceParquetFolder",
+				"sourceParquetFolder derive(etl_timestamp = currentTimestamp(),",
+				"     partitionBy('hash', 1)) ~> derivedColumnETL",
+				"derivedColumnETL sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'delta',",
+				"     fileSystem: ($PARAM_SINK_FILE_SYSTEM),",
+				"     folderPath: ($PARAM_SINK_FILE_PATH),",
+				"     deltaTruncate: true,",
+				"     mergeSchema: true,",
+				"     autoCompact: false,",
+				"     optimizedWrite: false,",
+				"     vacuum: 0,",
+				"     deletable: false,",
+				"     insertable: true,",
+				"     updateable: false,",
+				"     upsertable: false,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> sinkDelta"
+			]
+		}
+	}
+}

@@ -1,0 +1,83 @@
+{
+	"name": "sdlh_business_central_get_available_tables",
+	"properties": {
+		"folder": {
+			"name": "SDLH/Web_Services/Business_Central"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_xml",
+						"type": "DatasetReference"
+					},
+					"name": "sourceOData"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_csv_comma",
+						"type": "DatasetReference"
+					},
+					"name": "sinkOData"
+				}
+			],
+			"transformations": [
+				{
+					"name": "flattenOData"
+				},
+				{
+					"name": "sortOData"
+				}
+			],
+			"scriptLines": [
+				"parameters{",
+				"     PARAM_ODATA_CSV_OUTPUT_FILENAME as string",
+				"}",
+				"source(output(",
+				"          {http://docs.oasis-open.org/odata/ns/edmx,Edmx} as ({@Version} as double, {http://docs.oasis-open.org/odata/ns/edmx,DataServices} as ({http://docs.oasis-open.org/odata/ns/edm,Schema} as ({@Namespace} as string, {http://docs.oasis-open.org/odata/ns/edm,Action} as ({@IsBound} as boolean, {@Name} as string, {http://docs.oasis-open.org/odata/ns/edm,Parameter} as ({@Name} as string, {@Scale} as string, {@Type} as string)[], {http://docs.oasis-open.org/odata/ns/edm,ReturnType} as ({@Scale} as string, {@Type} as string))[], {http://docs.oasis-open.org/odata/ns/edm,Annotations} as ({@Target} as string, {http://docs.oasis-open.org/odata/ns/edm,Annotation} as ({@Bool} as boolean, {@Term} as string))[], {http://docs.oasis-open.org/odata/ns/edm,EntityContainer} as ({@Name} as string, {http://docs.oasis-open.org/odata/ns/edm,ActionImport} as ({@Action} as string, {@Name} as string)[], {http://docs.oasis-open.org/odata/ns/edm,EntitySet} as ({@EntityType} as string, {@Name} as string, {http://docs.oasis-open.org/odata/ns/edm,Annotation} as ({@Term} as string, {http://docs.oasis-open.org/odata/ns/edm,Record} as ({http://docs.oasis-open.org/odata/ns/edm,PropertyValue} as ({@Bool} as boolean, {@Property} as string)))[])[]), {http://docs.oasis-open.org/odata/ns/edm,EntityType} as ({@Name} as string, {http://docs.oasis-open.org/odata/ns/edm,Annotation} as ({@Bool} as boolean, {@String} as string, {@Term} as string, {http://docs.oasis-open.org/odata/ns/edm,Collection} as ({http://docs.oasis-open.org/odata/ns/edm,Record} as ({@Type} as string, {http://docs.oasis-open.org/odata/ns/edm,PropertyValue} as ({@Property} as string, {http://docs.oasis-open.org/odata/ns/edm,Collection} as ({http://docs.oasis-open.org/odata/ns/edm,Record} as ({@Type} as string, {http://docs.oasis-open.org/odata/ns/edm,PropertyValue} as ({@Property} as string, {@PropertyPath} as string, {@String} as string)[]))))))[], {http://docs.oasis-open.org/odata/ns/edm,Key} as ({http://docs.oasis-open.org/odata/ns/edm,PropertyRef} as ({@Name} as string)), {http://docs.oasis-open.org/odata/ns/edm,NavigationProperty} as ({@ContainsTarget} as boolean, {@Name} as string, {@Type} as string)[], {http://docs.oasis-open.org/odata/ns/edm,Property} as ({@MaxLength} as short, {@Name} as string, {@Nullable} as boolean, {@Scale} as string, {@Type} as string, {http://docs.oasis-open.org/odata/ns/edm,Annotation} as ({@Bool} as boolean, {@String} as string, {@Term} as string, {http://docs.oasis-open.org/odata/ns/edm,EnumMember} as string)[])[])[], {http://docs.oasis-open.org/odata/ns/edm,EnumType} as ({@Name} as string, {http://docs.oasis-open.org/odata/ns/edm,Member} as ({@Name} as string, {@Value} as short)[]))))",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     ignoreNoFilesFound: false,",
+				"     validationMode: 'none',",
+				"     namespaces: true) ~> sourceOData",
+				"sourceOData foldDown(unroll({http://docs.oasis-open.org/odata/ns/edmx,Edmx}.{http://docs.oasis-open.org/odata/ns/edmx,DataServices}.{http://docs.oasis-open.org/odata/ns/edm,Schema}.{http://docs.oasis-open.org/odata/ns/edm,EntityType}),",
+				"     mapColumn(",
+				"          TABLE_NAME = {http://docs.oasis-open.org/odata/ns/edmx,Edmx}.{http://docs.oasis-open.org/odata/ns/edmx,DataServices}.{http://docs.oasis-open.org/odata/ns/edm,Schema}.{http://docs.oasis-open.org/odata/ns/edm,EntityType}.{@Name}",
+				"     ),",
+				"     skipDuplicateMapInputs: false,",
+				"     skipDuplicateMapOutputs: false) ~> flattenOData",
+				"flattenOData sort(asc(TABLE_NAME, true),",
+				"     partitionBy('hash', 1)) ~> sortOData",
+				"sortOData sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     input(",
+				"          SERVER_NAME as string,",
+				"          DATABASE_NAME as string,",
+				"          TABLE_SCHEMA as string,",
+				"          TABLE_NAME as string,",
+				"          OBJECT_TYPE as string,",
+				"          LOAD_TYPE as string,",
+				"          WATERMARK as string,",
+				"          WATERMARK_FIELD as string,",
+				"          BATCH_FREQUENCY as string,",
+				"          SOURCE_SYS_CONNECTION_STRING as string,",
+				"          SERVERLESS_SQL_POOL_DATABASE as string,",
+				"          SERVERLESS_SQL_POOL_SCHEMA as string,",
+				"          PRIMARY_KEYS as string,",
+				"          ETL_QUEUE_NAME as string",
+				"     ),",
+				"     partitionFileNames:[($PARAM_ODATA_CSV_OUTPUT_FILENAME)],",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> sinkOData"
+			]
+		}
+	}
+}

@@ -846,6 +846,9 @@
 				"state": "Inactive",
 				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -875,7 +878,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/My_SQL"
+			"name": "SDLH/SQL_Services/My_SQL"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-07-25T15:14:09Z"

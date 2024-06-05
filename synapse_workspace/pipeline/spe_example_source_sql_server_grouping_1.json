@@ -1,5 +1,5 @@
 {
-	"name": "spe_adventureworks_grouping_1",
+	"name": "spe_example_source_sql_server_grouping_1",
 	"properties": {
 		"activities": [
 			{
@@ -13,6 +13,9 @@
 						]
 					}
 				],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -45,6 +48,9 @@
 				"name": "run_pipeline_concurrency_check",
 				"type": "ExecutePipeline",
 				"dependsOn": [],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -79,6 +85,9 @@
 						]
 					}
 				],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
@@ -102,10 +111,8 @@
 				}
 			},
 			{
-				"name": "adventurworks_curated",
+				"name": "sdlh_curated_grouping_1_priority_1",
 				"type": "ExecutePipeline",
-				"state": "Inactive",
-				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "sdlh_sql_load_grouping_1",
@@ -114,9 +121,20 @@
 						]
 					}
 				],
+				"policy": {
+					"secureInput": false
+				},
 				"userProperties": [],
 				"typeProperties": {
-					"waitOnCompletion": true
+					"pipeline": {
+						"referenceName": "sdlh_curation_create_external_table_via_query",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"PARAM_CURATION_GROUPING_ID": "1",
+						"PARAM_CURATION_GROUPING_PRIORITY": "1"
+					}
 				}
 			}
 		],
@@ -127,7 +145,7 @@
 			},
 			"PARAM_SOURCE_SYSTEM": {
 				"type": "string",
-				"defaultValue": "AdventureWorks"
+				"defaultValue": "ExampleSource"
 			},
 			"PARAM_DEPLOY_ENRICHED_LAYER": {
 				"type": "bool",

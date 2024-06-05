@@ -396,7 +396,7 @@
 											"source": {
 												"type": "AzureSqlSource",
 												"sqlReaderQuery": {
-													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')}' AS DATETIME2)",
+													"value": "SELECT @{item().COLUMNS_META},\n'I' AS etl_action\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",
@@ -575,7 +575,7 @@
 												},
 												"ERROR_MESSAGE": {
 													"value": {
-														"value": "@{activity('copy_sql_to_parquet_raw_watermark').output.errors[0]?.Message}",
+														"value": "@activity('copy_sql_to_parquet_raw_watermark').output.errors[0].Message",
 														"type": "Expression"
 													},
 													"type": "String"
@@ -757,14 +757,14 @@
 													"NEW_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
+															"value": "@formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')",
 															"type": "Expression"
 														}
 													},
 													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
+															"value": "@formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')",
 															"type": "Expression"
 														}
 													}
@@ -869,7 +869,7 @@
 								"source": {
 									"type": "PostgreSqlSource",
 									"query": {
-										"value": "SELECT MAX(\"@{item().WATERMARK_COLUMN}\") AS NEW_WATERMARK_VALUE\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\"",
+										"value": "SELECT\n\tCASE\n\t\tWHEN MAX(\"@{item().WATERMARK_COLUMN}\") IS NULL THEN '1900-01-01 00:00:00'\n\t\tELSE MAX(\"@{item().WATERMARK_COLUMN}\")\n\tEND AS NEW_WATERMARK_VALUE\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\"\n",
 										"type": "Expression"
 									}
 								},
@@ -919,7 +919,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/Postgre_SQL/Support"
+			"name": "SDLH/SQL_Services/Postgre_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

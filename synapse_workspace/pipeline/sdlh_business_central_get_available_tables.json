@@ -1,0 +1,360 @@
+{
+	"name": "sdlh_business_central_get_available_tables",
+	"properties": {
+		"activities": [
+			{
+				"name": "get_odata_metadata_xml",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "set_service_url",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "get_keyvault_secret_client_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@variables('VAR_SERVICE_URL')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "ServicePrincipal",
+						"userTenant": {
+							"value": "@activity('get_keyvault_secret_tenant_id').output.value",
+							"type": "Expression"
+						},
+						"username": {
+							"value": "@activity('get_keyvault_secret_client_id').output.value",
+							"type": "Expression"
+						},
+						"resource": {
+							"value": "@variables('VAR_ENTRA_RESOURCE_ID')",
+							"type": "Expression"
+						},
+						"password": {
+							"type": "AzureKeyVaultSecret",
+							"store": {
+								"referenceName": "keyvault_data_azir",
+								"type": "LinkedServiceReference"
+							},
+							"secretName": "aad-sp-data-azuredevops-secret"
+						}
+					}
+				}
+			},
+			{
+				"name": "put_odata_metadata_xml_in_adls",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "set_odata_metadata_xml",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "PUT",
+					"headers": {
+						"x-ms-version": "2023-08-03",
+						"x-ms-date": {
+							"value": "@formatDateTime(utcnow(),'r')",
+							"type": "Expression"
+						},
+						"x-ms-blob-type": "BlockBlob",
+						"Content-Type": "text/xml"
+					},
+					"url": {
+						"value": "@concat('https://',activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME,'.blob.core.windows.net/metadata/business_central/',variables('VAR_ODATA_XML_OUTPUT_FILENAME'))",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"body": {
+						"value": "@variables('VAR_ODATA_XML_OUTPUT')",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://storage.azure.com/"
+					}
+				}
+			},
+			{
+				"name": "set_odata_metadata_xml",
+				"description": "",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "get_odata_metadata_xml",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_ODATA_XML_OUTPUT",
+					"value": {
+						"value": "@replace(activity('get_odata_metadata_xml').output.Response,'\\\"','\"')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "get_keyvault_secret_client_id",
+				"description": "Used retrieve secret from key vault and secure the output",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI,'secrets/',pipeline().parameters.PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME,'/?api-version=7.0')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "get_keyvault_secret_tenant_id",
+				"description": "Used retrieve secret from key vault and secure the output",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "GET",
+					"url": {
+						"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI,'secrets/azure-ad-tenant-id/?api-version=7.0')",
+						"type": "Expression"
+					},
+					"connectVia": {
+						"referenceName": "AutoResolveIntegrationRuntime",
+						"type": "IntegrationRuntimeReference"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://vault.azure.net"
+					}
+				}
+			},
+			{
+				"name": "set_service_url",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "get_keyvault_secret_tenant_id",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "VAR_SERVICE_URL",
+					"value": {
+						"value": "@concat('https://api.businesscentral.dynamics.com/v2.0/',activity('get_keyvault_secret_tenant_id').output.value,'/',activity('lookup_pipeline_parameters').output.firstRow.BUSINESS_CENTRAL_ENVIRONMENT_NAME,'/ODataV4/$metadata')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "generate_lists_of_available_tables",
+				"description": "Creates csv file in the ADLS.\nmetadata/business_central/",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "put_odata_metadata_xml_in_adls",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "sdlh_business_central_get_available_tables",
+						"type": "DataFlowReference",
+						"parameters": {
+							"PARAM_ODATA_CSV_OUTPUT_FILENAME": {
+								"value": "'@{variables('VAR_ODATA_CSV_OUTPUT_FILENAME')}'",
+								"type": "Expression"
+							}
+						},
+						"datasetParameters": {
+							"sourceOData": {
+								"FILE_SYSTEM": "metadata",
+								"DIRECTORY": "business_central",
+								"FILE_NAME": {
+									"value": "@variables('VAR_ODATA_XML_OUTPUT_FILENAME')",
+									"type": "Expression"
+								}
+							},
+							"sinkOData": {
+								"FILE_SYSTEM": "metadata",
+								"DIRECTORY": "business_central",
+								"FILE_NAME": {
+									"value": "@variables('VAR_ODATA_CSV_OUTPUT_FILENAME')",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					},
+					"traceLevel": "Fine"
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_CLIENT_ID_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			},
+			"PARAM_CLIENT_SECRET_KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"VAR_ODATA_XML_OUTPUT": {
+				"type": "String"
+			},
+			"VAR_ODATA_XML_OUTPUT_FILENAME": {
+				"type": "String",
+				"defaultValue": "odata_metadata.xml"
+			},
+			"VAR_ODATA_CSV_OUTPUT_FILENAME": {
+				"type": "String",
+				"defaultValue": "odata_table_list.csv"
+			},
+			"VAR_ENTRA_RESOURCE_ID": {
+				"type": "String",
+				"defaultValue": "https://api.businesscentral.dynamics.com"
+			},
+			"VAR_SERVICE_URL": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services/Business_Central"
+		},
+		"annotations": []
+	}
+}

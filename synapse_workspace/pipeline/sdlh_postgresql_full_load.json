@@ -672,7 +672,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/Postgre_SQL/Support"
+			"name": "SDLH/SQL_Services/Postgre_SQL/Support"
 		},
 		"annotations": [],
 		"lastPublishTime": "2023-03-03T16:57:45Z"

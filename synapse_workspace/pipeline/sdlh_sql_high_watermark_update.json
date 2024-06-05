@@ -481,7 +481,7 @@
 													"NEW_INCREMENTAL_KEY_VALUE": {
 														"type": "String",
 														"value": {
-															"value": "@formatDateTime(activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')\n",
+															"value": "@formatDateTime(activity('lookup_set_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')\n",
 															"type": "Expression"
 														}
 													},
@@ -560,7 +560,7 @@
 			}
 		},
 		"folder": {
-			"name": "SDLH/Common"
+			"name": "SDLH/SQL_Services/_Common"
 		},
 		"annotations": []
 	}
