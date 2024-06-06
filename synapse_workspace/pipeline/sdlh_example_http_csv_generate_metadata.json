@@ -1096,8 +1096,7 @@
 				"defaultValue": "HTTP"
 			},
 			"PARAM_SOURCE_SYSTEM": {
-				"type": "string",
-				"defaultValue": "LG_Infrom_Plus"
+				"type": "string"
 			},
 			"PARAM_SOURCE_GROUPING_ID_START": {
 				"type": "string",
@@ -1108,12 +1107,10 @@
 				"defaultValue": "1"
 			},
 			"PARAM_BASE_URL": {
-				"type": "string",
-				"defaultValue": "https://standards.esd.org.uk/"
+				"type": "string"
 			},
 			"PARAM_KEYVAULT_SECRET_NAME": {
-				"type": "string",
-				"defaultValue": "http-test-token"
+				"type": "string"
 			},
 			"PARAM_CREATE_LAKEHOUSE_BASE_CONFIG": {
 				"type": "bool",
