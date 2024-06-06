@@ -1339,8 +1339,7 @@
 				"defaultValue": "HTTP"
 			},
 			"PARAM_SOURCE_SYSTEM": {
-				"type": "string",
-				"defaultValue": "Sharepoint"
+				"type": "string"
 			},
 			"PARAM_SOURCE_GROUPING_ID_START": {
 				"type": "string",
@@ -1351,16 +1350,13 @@
 				"defaultValue": "1"
 			},
 			"PARAM_BASE_URL": {
-				"type": "string",
-				"defaultValue": "https://islingtoncouncil.sharepoint.com/"
+				"type": "string"
 			},
 			"PARAM_KEYVAULT_SECRET_CLIENT_SECRET": {
-				"type": "string",
-				"defaultValue": "sharepoint-test-client-secret"
+				"type": "string"
 			},
 			"PARAM_KEYVAULT_SECRET_CLIENT_ID": {
-				"type": "string",
-				"defaultValue": "sharepoint-test-client-id"
+				"type": "string"
 			},
 			"PARAM_CREATE_LAKEHOUSE_BASE_CONFIG": {
 				"type": "bool",
