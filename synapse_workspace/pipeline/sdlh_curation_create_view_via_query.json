@@ -1,5 +1,5 @@
 {
-	"name": "sdlh_curation_create_external_table_via_stored_proc",
+	"name": "sdlh_curation_create_view_via_query",
 	"properties": {
 		"activities": [
 			{
@@ -53,8 +53,8 @@
 					},
 					"activities": [
 						{
-							"name": "delete_any_previous_output",
-							"type": "Delete",
+							"name": "generate_curated_view",
+							"type": "SqlServerStoredProcedure",
 							"dependsOn": [],
 							"policy": {
 								"timeout": "0.12:00:00",
@@ -65,49 +65,7 @@
 							},
 							"userProperties": [],
 							"typeProperties": {
-								"dataset": {
-									"referenceName": "sdlh_gen2_parquet_folder_snappy",
-									"type": "DatasetReference",
-									"parameters": {
-										"FP0": {
-											"value": "@item().ADLS_CONTAINER",
-											"type": "Expression"
-										},
-										"FP1": {
-											"value": "@item().ADLS_LOCATION_PATH",
-											"type": "Expression"
-										}
-									}
-								},
-								"enableLogging": false,
-								"storeSettings": {
-									"type": "AzureBlobFSReadSettings",
-									"recursive": true,
-									"enablePartitionDiscovery": false
-								}
-							}
-						},
-						{
-							"name": "generate_curated_table",
-							"type": "SqlServerStoredProcedure",
-							"dependsOn": [
-								{
-									"activity": "delete_any_previous_output",
-									"dependencyConditions": [
-										"Succeeded"
-									]
-								}
-							],
-							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
-								"secureInput": false
-							},
-							"userProperties": [],
-							"typeProperties": {
-								"storedProcedureName": "[Config].[usp_ExecuteStoredProcedure]",
+								"storedProcedureName": "[Config].[usp_CreateOrAlterView]",
 								"storedProcedureParameters": {
 									"PARAM_TARGET_DATABASE_NAME": {
 										"value": {
@@ -123,7 +81,14 @@
 										},
 										"type": "String"
 									},
-									"PARAM_STORED_PROCEDURE_NAME": {
+									"PARAM_TARGET_VIEW_NAME": {
+										"value": {
+											"value": "@item().TARGET_TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_SQL_QUERY": {
 										"value": {
 											"value": "@item().SQL_QUERY_OR_PROCEDURE_NAME",
 											"type": "Expression"

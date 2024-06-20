@@ -118,7 +118,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_http_anonymous_csv_comma_escape_double_quote",
+									"referenceName": "sdlh_http_anonymous_csv_comma_defaults",
 									"type": "DatasetReference",
 									"parameters": {
 										"BASE_URL": {
@@ -614,6 +614,27 @@
 							"typeProperties": {
 								"storedProcedureName": "[Config].[usp_CreateExternalTable]",
 								"storedProcedureParameters": {
+									"PARAM_TARGET_DATABASE_NAME": {
+										"value": {
+											"value": "@item().SERVERLESS_SQL_POOL_DATABASE",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_TARGET_SCHEMA_NAME": {
+										"value": {
+											"value": "@item().SERVERLESS_SQL_POOL_SCHEMA",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
+									"PARAM_TARGET_TABLE_NAME": {
+										"value": {
+											"value": "@item().TABLE_NAME",
+											"type": "Expression"
+										},
+										"type": "String"
+									},
 									"PARAM_ADLS_LOCATION_PATH": {
 										"value": {
 											"value": "@json(activity('lookup_object_metadata').output.firstRow.ADLS_PATHS)[0].staged[0].FP1",
@@ -627,27 +648,6 @@
 									},
 									"PARAM_EXTERNAL_FILE_FORMAT": {
 										"value": "exff_delta",
-										"type": "String"
-									},
-									"PARAM_OUTPUT_SCHEMA_NAME": {
-										"value": {
-											"value": "@item().SERVERLESS_SQL_POOL_SCHEMA",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PARAM_OUTPUT_TABLE_NAME": {
-										"value": {
-											"value": "@item().TABLE_NAME",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PARAM_SERVERLESS_SQL_DATABASE": {
-										"value": {
-											"value": "@item().SERVERLESS_SQL_POOL_DATABASE",
-											"type": "Expression"
-										},
 										"type": "String"
 									},
 									"PARAM_SQL_QUERY": {
