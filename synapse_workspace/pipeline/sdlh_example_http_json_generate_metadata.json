@@ -1031,48 +1031,28 @@
 					},
 					"ifTrueActivities": [
 						{
-							"name": "create_serverless_base_config",
-							"type": "SqlServerStoredProcedure",
+							"name": "sdlh_lakehouse_create_base_config",
+							"type": "ExecutePipeline",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
-								"secureOutput": false,
 								"secureInput": false
 							},
 							"userProperties": [],
 							"typeProperties": {
-								"storedProcedureName": "[Config].[usp_CreateServerlessBaseConfig]",
-								"storedProcedureParameters": {
-									"PARAM_TARGET_DATABASE_NAME": {
-										"value": {
-											"value": "@activity('lookup_etl_metadata').output.value[0].SERVERLESS_SQL_POOL_DATABASE",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PARAM_TARGET_SCEMA_NAME": {
-										"value": {
-											"value": "@activity('lookup_etl_metadata').output.value[0].SERVERLESS_SQL_POOL_SCHEMA",
-											"type": "Expression"
-										},
-										"type": "String"
-									},
-									"PARAM_STORAGE_ACCOUNT_NAME": {
-										"value": {
-											"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
-											"type": "Expression"
-										},
-										"type": "String"
-									}
-								}
-							},
-							"linkedServiceName": {
-								"referenceName": "synapse_sql_serverless_azir",
-								"type": "LinkedServiceReference",
+								"pipeline": {
+									"referenceName": "sdlh_lakehouse_create_base_config",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
 								"parameters": {
-									"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+									"PARAM_TARGET_DATABASE_NAME": {
+										"value": "@activity('lookup_etl_metadata').output.value[0].SERVERLESS_SQL_POOL_DATABASE",
+										"type": "Expression"
+									},
+									"PARAM_TARGET_SCHEMA_NAME": {
+										"value": "@activity('lookup_etl_metadata').output.value[0].SERVERLESS_SQL_POOL_SCHEMA",
+										"type": "Expression"
+									}
 								}
 							}
 						}

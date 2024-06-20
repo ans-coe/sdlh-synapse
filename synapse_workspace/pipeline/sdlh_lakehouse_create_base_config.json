@@ -1,0 +1,108 @@
+{
+	"name": "sdlh_lakehouse_create_base_config",
+	"properties": {
+		"activities": [
+			{
+				"name": "create_serverless_base_config",
+				"type": "SqlServerStoredProcedure",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"storedProcedureName": "[Config].[usp_CreateServerlessBaseConfig]",
+					"storedProcedureParameters": {
+						"PARAM_TARGET_DATABASE_NAME": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_TARGET_DATABASE_NAME",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_TARGET_SCHEMA_NAME": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_TARGET_SCHEMA_NAME",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_STORAGE_ACCOUNT_NAME": {
+							"value": {
+								"value": "@activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME",
+								"type": "Expression"
+							},
+							"type": "String"
+						}
+					}
+				},
+				"linkedServiceName": {
+					"referenceName": "synapse_sql_serverless_azir",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+					}
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "Execute the stored procedure [Config].[usp_GetPipelineParameters] to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_TARGET_DATABASE_NAME": {
+				"type": "string"
+			},
+			"PARAM_TARGET_SCHEMA_NAME": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"annotations": []
+	}
+}
