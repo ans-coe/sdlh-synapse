@@ -1,0 +1,30 @@
+{
+	"name": "oraclesql_sdlh_shir",
+	"properties": {
+		"parameters": {
+			"CONNECTION_STRING_SECRET_NAME": {
+				"type": "string",
+				"defaultValue": "oraclesql-lpg-connection-string"
+			}
+		},
+		"annotations": [],
+		"type": "Oracle",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "shir-smbc-data-uksouth-001",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}
