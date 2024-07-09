@@ -625,7 +625,10 @@
 										},
 										"COMPONENT_NAME": {
 											"type": "String",
-											"value": "sqlserver_load_control"
+											"value": {
+												"value": "@toLower(concat(pipeline().parameters.PARAM_SOURCE_TYPE,'_load_control'))",
+												"type": "Expression"
+											}
 										},
 										"TARGET_SYSTEM": {
 											"type": "String",
