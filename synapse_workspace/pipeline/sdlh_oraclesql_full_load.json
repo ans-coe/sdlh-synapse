@@ -27,9 +27,9 @@
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
+								"timeout": "0.00:10:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
 								"secureOutput": false,
 								"secureInput": false
 							},
@@ -134,7 +134,7 @@
 													"source": {
 														"type": "OracleSource",
 														"oracleReaderQuery": {
-															"value": "SELECT @{item().COLUMNS_META},\n    'I' as \"etl_action\"\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S",
+															"value": "SELECT @{item().COLUMNS_META}\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S",
 															"type": "Expression"
 														},
 														"partitionOption": "None",
@@ -207,9 +207,9 @@
 												"type": "Lookup",
 												"dependsOn": [],
 												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
+													"timeout": "0.00:10:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
 													"secureOutput": false,
 													"secureInput": false
 												},
@@ -391,9 +391,9 @@
 													}
 												],
 												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
+													"timeout": "0.00:30:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
 													"secureOutput": false,
 													"secureInput": false
 												},
@@ -461,9 +461,9 @@
 													}
 												],
 												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
+													"timeout": "0.00:30:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
 													"secureOutput": false,
 													"secureInput": false
 												},
@@ -528,9 +528,9 @@
 													}
 												],
 												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
+													"timeout": "0.00:30:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
 													"secureOutput": false,
 													"secureInput": false
 												},
@@ -575,9 +575,9 @@
 													}
 												],
 												"policy": {
-													"timeout": "0.12:00:00",
-													"retry": 0,
-													"retryIntervalInSeconds": 30,
+													"timeout": "0.00:30:00",
+													"retry": 2,
+													"retryIntervalInSeconds": 60,
 													"secureOutput": false,
 													"secureInput": false
 												},
@@ -639,9 +639,9 @@
 										"type": "Lookup",
 										"dependsOn": [],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:10:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -822,9 +822,9 @@
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},

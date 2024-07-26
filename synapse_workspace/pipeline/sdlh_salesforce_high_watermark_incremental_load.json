@@ -8,9 +8,9 @@
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -66,7 +66,7 @@
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
+								"timeout": "0.00:10:00",
 								"retry": 2,
 								"retryIntervalInSeconds": 60,
 								"secureOutput": false,
@@ -117,9 +117,9 @@
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
+								"timeout": "0.00:10:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
 								"secureOutput": false,
 								"secureInput": false
 							},
@@ -209,9 +209,9 @@
 										"type": "Lookup",
 										"dependsOn": [],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:10:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -392,9 +392,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -536,9 +536,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -606,9 +606,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -669,9 +669,9 @@
 										"type": "Lookup",
 										"dependsOn": [],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:10:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -853,9 +853,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -920,8 +920,8 @@
 				"dependsOn": [],
 				"policy": {
 					"timeout": "0.00:10:00",
-					"retry": 3,
-					"retryIntervalInSeconds": 30,
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -962,9 +962,9 @@
 					}
 				],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
