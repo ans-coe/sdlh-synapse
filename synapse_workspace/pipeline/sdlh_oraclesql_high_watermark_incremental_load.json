@@ -8,9 +8,9 @@
 				"type": "Lookup",
 				"dependsOn": [],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -60,7 +60,7 @@
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
+								"timeout": "0.00:10:00",
 								"retry": 2,
 								"retryIntervalInSeconds": 60,
 								"secureOutput": false,
@@ -95,9 +95,9 @@
 							"type": "Lookup",
 							"dependsOn": [],
 							"policy": {
-								"timeout": "0.12:00:00",
-								"retry": 0,
-								"retryIntervalInSeconds": 30,
+								"timeout": "0.00:10:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 60,
 								"secureOutput": false,
 								"secureInput": false
 							},
@@ -187,9 +187,9 @@
 										"type": "Lookup",
 										"dependsOn": [],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:10:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -373,9 +373,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -430,7 +430,7 @@
 										"typeProperties": {
 											"source": {
 												"type": "OracleSource",
-												"oracleReaderQuery": "SELECT @{item().COLUMNS_META},\r\n'I' AS \"etl_action\"\r\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\r\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST(TO_TIMESTAMP('@{formatDateTime(item().LAST_WATERMARK_VALUE,'yyyy-MM-dd HH:mm:ss.fffffff')}','YYYY-MM-DD HH24:MI:SS.FF7') AS DATE)\r\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST(TO_TIMESTAMP('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE,'yyyy-MM-dd HH:mm:ss.fffffff')}','YYYY-MM-DD HH24:MI:SS.FF7') AS DATE)",
+												"oracleReaderQuery": "SELECT @{item().COLUMNS_META}\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\r\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST(TO_TIMESTAMP('@{formatDateTime(item().LAST_WATERMARK_VALUE,'yyyy-MM-dd HH:mm:ss.fffffff')}','YYYY-MM-DD HH24:MI:SS.FF7') AS DATE)\r\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST(TO_TIMESTAMP('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE,'yyyy-MM-dd HH:mm:ss.fffffff')}','YYYY-MM-DD HH24:MI:SS.FF7') AS DATE)",
 												"partitionOption": "None",
 												"queryTimeout": "02:00:00"
 											},
@@ -507,9 +507,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -577,9 +577,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -640,9 +640,9 @@
 										"type": "Lookup",
 										"dependsOn": [],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:10:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},
@@ -830,9 +830,9 @@
 											}
 										],
 										"policy": {
-											"timeout": "0.12:00:00",
-											"retry": 0,
-											"retryIntervalInSeconds": 30,
+											"timeout": "0.00:30:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
 											"secureOutput": false,
 											"secureInput": false
 										},

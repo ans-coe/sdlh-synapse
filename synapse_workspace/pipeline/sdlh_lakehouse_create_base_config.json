@@ -14,9 +14,9 @@
 					}
 				],
 				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
+					"timeout": "0.00:30:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -27,6 +27,13 @@
 						"PARAM_TARGET_DATABASE_NAME": {
 							"value": {
 								"value": "@pipeline().parameters.PARAM_TARGET_DATABASE_NAME",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_TARGET_DATABASE_COLLATION": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_TARGET_DATABASE_COLLATION",
 								"type": "Expression"
 							},
 							"type": "String"
@@ -62,8 +69,8 @@
 				"dependsOn": [],
 				"policy": {
 					"timeout": "0.00:10:00",
-					"retry": 3,
-					"retryIntervalInSeconds": 30,
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
 					"secureOutput": false,
 					"secureInput": false
 				},
@@ -95,6 +102,10 @@
 		"parameters": {
 			"PARAM_TARGET_DATABASE_NAME": {
 				"type": "string"
+			},
+			"PARAM_TARGET_DATABASE_COLLATION": {
+				"type": "string",
+				"defaultValue": "Latin1_General_100_BIN2_UTF8"
 			},
 			"PARAM_TARGET_SCHEMA_NAME": {
 				"type": "string"

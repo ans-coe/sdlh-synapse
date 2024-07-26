@@ -98,6 +98,13 @@
 					"   <td>Removed lower() from column name <br> Added data type swap for datetimeoffset to datetime2<br> Column INFO schema removed reference to IS_NULLABLE</td>\r\n",
 					"   <td></td>\r\n",
 					"  </tr>\r\n",
+					"  <tr>\r\n",
+					"   <td>Darren Price</td>\r\n",
+					"   <td>2024-07-24</td>\r\n",
+					"   <td>2.2.14</td>\r\n",
+					"   <td>Updated create lakhouse database to use UTF8 collation</td>\r\n",
+					"   <td></td>\r\n",
+					"  </tr>\r\n",
 					" </tbody>\r\n",
 					"</table>"
 				]
@@ -153,7 +160,7 @@
 					"        create_database = f'''\r\n",
 					"            IF NOT EXISTS (SELECT [name] FROM sys.databases WHERE [name] = '{serverless_sql_pool_database}')\r\n",
 					"            BEGIN\r\n",
-					"                EXEC('CREATE DATABASE [{serverless_sql_pool_database}]')\r\n",
+					"                EXEC('CREATE DATABASE [{serverless_sql_pool_database}] COLLATE Latin1_General_100_BIN2_UTF8;')\r\n",
 					"            END;\r\n",
 					"        '''\r\n",
 					"\r\n",
