@@ -133,6 +133,13 @@
 					"   <td>Fixed the mapping data types function. </td>\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Andrei Dumitru</td>\n",
+					"   <td>2024-10-03</td>\n",
+					"   <td>2.2.17</td>\n",
+					"   <td>Changed the Serverless SQL collation to Latin1_General_100_CI_AS_SC_UTF8 which is case insensitive.</td>\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -188,7 +195,7 @@
 					"        create_database = f'''\n",
 					"            IF NOT EXISTS (SELECT [name] FROM sys.databases WHERE [name] = '{serverless_sql_pool_database}')\n",
 					"            BEGIN\n",
-					"                EXEC('CREATE DATABASE [{serverless_sql_pool_database}] COLLATE Latin1_General_100_BIN2_UTF8;')\n",
+					"                EXEC('CREATE DATABASE [{serverless_sql_pool_database}] COLLATE Latin1_General_100_CI_AS_SC_UTF8;')\n",
 					"            END;\n",
 					"        '''\n",
 					"\n",
