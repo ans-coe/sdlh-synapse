@@ -7,7 +7,14 @@
 				"name": "get_object_metadata",
 				"description": "gets a list of objects from ETL.JsonMetadata.OBJECT_NAME, which is used to construct the row counts queries in the subsequent loop ",
 				"type": "Lookup",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.00:10:00",
 					"retry": 2,
@@ -580,7 +587,7 @@
 												"type": "Lookup",
 												"dependsOn": [
 													{
-														"activity": "object_parameter_mysql",
+														"activity": "get_connection_details_mysql",
 														"dependencyConditions": [
 															"Succeeded"
 														]
@@ -606,11 +613,27 @@
 														"referenceName": "sdlh_mysql_db_table",
 														"type": "DatasetReference",
 														"parameters": {
-															"SOURCE_CONNECTION_STRING": {
-																"value": "@json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+															"TABLE_NAME": "na",
+															"SERVER_NAME": {
+																"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[0], 'Server=', '')",
 																"type": "Expression"
 															},
-															"TABLE_NAME": "na"
+															"PORT": {
+																"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[1], 'Port=', '')",
+																"type": "Expression"
+															},
+															"DATABASE_NAME": {
+																"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[2], 'Database=', '')",
+																"type": "Expression"
+															},
+															"USER_NAME": {
+																"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[3], 'UID=', '')",
+																"type": "Expression"
+															},
+															"PASSWORD_SECRET": {
+																"value": "@split(json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[1]",
+																"type": "Expression"
+															}
 														}
 													},
 													"firstRowOnly": true
@@ -769,6 +792,42 @@
 													"referenceName": "azure_sql_data_no_param_azir",
 													"type": "LinkedServiceReference"
 												}
+											},
+											{
+												"name": "get_connection_details_mysql",
+												"description": "Web activity that performs a GET API request to Azure Key Vault to retrieve the connection details specific to each data source. ",
+												"type": "WebActivity",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_mysql",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": true,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"method": "GET",
+													"url": {
+														"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI, 'secrets/', split(json(activity('object_parameter_mysql').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[0],'?api-version=7.0')",
+														"type": "Expression"
+													},
+													"connectVia": {
+														"referenceName": "AutoResolveIntegrationRuntime",
+														"type": "IntegrationRuntimeReference"
+													},
+													"authentication": {
+														"type": "MSI",
+														"resource": "https://vault.azure.net"
+													}
+												}
 											}
 										]
 									},
@@ -813,7 +872,7 @@
 												"type": "Lookup",
 												"dependsOn": [
 													{
-														"activity": "object_parameter_postgres",
+														"activity": "get_connection_details_postgres",
 														"dependencyConditions": [
 															"Succeeded"
 														]
@@ -829,7 +888,7 @@
 												"userProperties": [],
 												"typeProperties": {
 													"source": {
-														"type": "PostgreSqlSource",
+														"type": "PostgreSqlV2Source",
 														"query": {
 															"value": "SELECT COUNT(*) AS source_row_count\nFROM \"@{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SCHEMA_NAME}\".\"@{json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}\"",
 															"type": "Expression"
@@ -839,12 +898,28 @@
 														"referenceName": "sdlh_postgresql_db_table",
 														"type": "DatasetReference",
 														"parameters": {
-															"SOURCE_CONNECTION_STRING": {
-																"value": "@json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING",
+															"SCHEMA_NAME": "na",
+															"TABLE_NAME": "na",
+															"SERVER_NAME": {
+																"value": "@replace(split(activity('get_connection_details_postgres').output.value, ';')[0], 'Server=', '')",
 																"type": "Expression"
 															},
-															"SCHEMA_NAME": "na",
-															"TABLE_NAME": "na"
+															"PORT": {
+																"value": "@replace(split(activity('get_connection_details_postgres').output.value, ';')[1], 'Port=', '')",
+																"type": "Expression"
+															},
+															"DATABASE_NAME": {
+																"value": "@replace(split(activity('get_connection_details_postgres').output.value, ';')[2], 'Database=', '')",
+																"type": "Expression"
+															},
+															"USER_NAME": {
+																"value": "@replace(split(activity('get_connection_details_postgres').output.value, ';')[3], 'UID=', '')",
+																"type": "Expression"
+															},
+															"PASSWORD_SECRET": {
+																"value": "@split(json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[1]",
+																"type": "Expression"
+															}
 														}
 													},
 													"firstRowOnly": true
@@ -1002,6 +1077,42 @@
 												"linkedServiceName": {
 													"referenceName": "azure_sql_data_no_param_azir",
 													"type": "LinkedServiceReference"
+												}
+											},
+											{
+												"name": "get_connection_details_postgres",
+												"description": "Web activity that performs a GET API request to Azure Key Vault to retrieve the connection details specific to each data source. ",
+												"type": "WebActivity",
+												"dependsOn": [
+													{
+														"activity": "object_parameter_postgres",
+														"dependencyConditions": [
+															"Succeeded"
+														]
+													}
+												],
+												"policy": {
+													"timeout": "0.12:00:00",
+													"retry": 0,
+													"retryIntervalInSeconds": 30,
+													"secureOutput": true,
+													"secureInput": false
+												},
+												"userProperties": [],
+												"typeProperties": {
+													"method": "GET",
+													"url": {
+														"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI, 'secrets/', split(json(activity('object_parameter_postgres').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[0],'?api-version=7.0')",
+														"type": "Expression"
+													},
+													"connectVia": {
+														"referenceName": "AutoResolveIntegrationRuntime",
+														"type": "IntegrationRuntimeReference"
+													},
+													"authentication": {
+														"type": "MSI",
+														"resource": "https://vault.azure.net"
+													}
 												}
 											}
 										]
@@ -1483,6 +1594,42 @@
 							}
 						}
 					]
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
 				}
 			}
 		],
