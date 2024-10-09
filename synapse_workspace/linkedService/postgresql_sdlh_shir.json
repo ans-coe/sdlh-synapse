@@ -1,31 +1,48 @@
 {
 	"name": "postgresql_sdlh_shir",
 	"properties": {
+		"description": "PostgreSQL v2 linked service deployed as part of SDLH.",
 		"parameters": {
-			"CONNECTION_STRING_SECRET_NAME": {
+			"SERVER_NAME": {
+				"type": "string"
+			},
+			"PORT": {
+				"type": "string"
+			},
+			"DATABASE_NAME": {
+				"type": "string"
+			},
+			"USER_NAME": {
+				"type": "string"
+			},
+			"PASSWORD_SECRET": {
 				"type": "string"
 			}
 		},
 		"annotations": [],
-		"type": "PostgreSql",
+		"type": "PostgreSqlV2",
 		"typeProperties": {
-			"connectionString": {
+			"server": "@{linkedService().SERVER_NAME}",
+			"port": "@{linkedService().PORT}",
+			"database": "@{linkedService().DATABASE_NAME}",
+			"username": "@{linkedService().USER_NAME}",
+			"password": {
 				"type": "AzureKeyVaultSecret",
 				"store": {
 					"referenceName": "keyvault_data_azir",
 					"type": "LinkedServiceReference"
 				},
 				"secretName": {
-					"value": "@linkedService().CONNECTION_STRING_SECRET_NAME",
+					"value": "@linkedService().PASSWORD_SECRET",
 					"type": "Expression"
 				}
-			}
+			},
+			"sslMode": 2,
+			"authenticationType": "Basic"
 		},
 		"connectVia": {
 			"referenceName": "PARAM_SHIR_NAME",
 			"type": "IntegrationRuntimeReference"
-		},
-		"description": "Added as part of ANS SDLH deployment"
-	},
-	"type": "Microsoft.Synapse/workspaces/linkedservices"
+		}
+	}
 }

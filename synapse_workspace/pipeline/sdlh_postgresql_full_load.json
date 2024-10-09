@@ -576,7 +576,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_postgresqlv2_db_table",
+									"referenceName": "sdlh_postgresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SCHEMA_NAME": {

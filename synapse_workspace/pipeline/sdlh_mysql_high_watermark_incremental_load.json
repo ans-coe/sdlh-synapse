@@ -6,7 +6,14 @@
 				"name": "lookup_tables_watermark",
 				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is WATERMARK.  ( If LAST_WATERMARK_VALUE IS NULL it uses datetime value of '1900-01-01 00:00:00' to simulate a first run scenario )",
 				"type": "Lookup",
-				"dependsOn": [],
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
 				"policy": {
 					"timeout": "0.00:10:00",
 					"retry": 2,
@@ -58,7 +65,14 @@
 							"name": "lookup_object_metadata_watermark",
 							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
 							"type": "Lookup",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "get_connection_details",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"policy": {
 								"timeout": "0.00:10:00",
 								"retry": 2,
@@ -423,12 +437,28 @@
 												"referenceName": "sdlh_mysql_db_table",
 												"type": "DatasetReference",
 												"parameters": {
-													"SOURCE_CONNECTION_STRING": {
-														"value": "@item().SOURCE_CONNECTION_STRING",
-														"type": "Expression"
-													},
 													"TABLE_NAME": {
 														"value": "@item().TABLE_NAME",
+														"type": "Expression"
+													},
+													"SERVER_NAME": {
+														"value": "@replace(split(activity('get_connection_details').output.value, ';')[0], 'Server=', '')",
+														"type": "Expression"
+													},
+													"PORT": {
+														"value": "@replace(split(activity('get_connection_details').output.value, ';')[1], 'Port=', '')",
+														"type": "Expression"
+													},
+													"DATABASE_NAME": {
+														"value": "@replace(split(activity('get_connection_details').output.value, ';')[2], 'Database=', '')",
+														"type": "Expression"
+													},
+													"USER_NAME": {
+														"value": "@replace(split(activity('get_connection_details').output.value, ';')[3], 'UID=', '')",
+														"type": "Expression"
+													},
+													"PASSWORD_SECRET": {
+														"value": "@split(item().SOURCE_CONNECTION_STRING, ',')[1]",
 														"type": "Expression"
 													}
 												}
@@ -846,7 +876,14 @@
 							"name": "lookup_new_watermark_value",
 							"description": "Running a query against the table in the source system, to get the newest watermark datetime in the table.",
 							"type": "Lookup",
-							"dependsOn": [],
+							"dependsOn": [
+								{
+									"activity": "get_connection_details",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
 							"policy": {
 								"timeout": "0.00:10:00",
 								"retry": 2,
@@ -867,17 +904,98 @@
 									"referenceName": "sdlh_mysql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SOURCE_CONNECTION_STRING": {
-											"value": "@item().SOURCE_CONNECTION_STRING",
+										"TABLE_NAME": "NA",
+										"SERVER_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[0], 'Server=', '')",
 											"type": "Expression"
 										},
-										"TABLE_NAME": "NA"
+										"PORT": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[1], 'Port=', '')",
+											"type": "Expression"
+										},
+										"DATABASE_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[2], 'Database=', '')",
+											"type": "Expression"
+										},
+										"USER_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[3], 'UID=', '')",
+											"type": "Expression"
+										},
+										"PASSWORD_SECRET": {
+											"value": "@split(item().SOURCE_CONNECTION_STRING, ',')[1]",
+											"type": "Expression"
+										}
 									}
 								},
 								"firstRowOnly": true
 							}
+						},
+						{
+							"name": "get_connection_details",
+							"description": "Web activity that performs a GET API request to Azure Key Vault to retrieve the connection details specific to each data source. ",
+							"type": "WebActivity",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": true,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI, 'secrets/', split(item().SOURCE_CONNECTION_STRING, ',')[0],'?api-version=7.0')",
+									"type": "Expression"
+								},
+								"connectVia": {
+									"referenceName": "AutoResolveIntegrationRuntime",
+									"type": "IntegrationRuntimeReference"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://vault.azure.net"
+								}
+							}
 						}
 					]
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
 				}
 			}
 		],

@@ -83,7 +83,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_postgresqlv2_db_table",
+									"referenceName": "sdlh_postgresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SCHEMA_NAME": {
@@ -184,7 +184,7 @@
 							},
 							"inputs": [
 								{
-									"referenceName": "sdlh_postgresqlv2_db_table",
+									"referenceName": "sdlh_postgresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
 										"SCHEMA_NAME": {
@@ -257,11 +257,11 @@
 									}
 								},
 								"dataset": {
-									"referenceName": "sdlh_postgresqlv2_db_table",
+									"referenceName": "sdlh_postgresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA",
+										"SCHEMA_NAME": "na",
+										"TABLE_NAME": "na",
 										"SERVER_NAME": {
 											"value": "@replace(split(activity('get_connection_details').output.value, ';')[0], 'Server=', '')",
 											"type": "Expression"

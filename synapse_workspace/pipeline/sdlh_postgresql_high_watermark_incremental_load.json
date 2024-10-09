@@ -822,7 +822,7 @@
 										},
 										"inputs": [
 											{
-												"referenceName": "sdlh_postgresqlv2_db_table",
+												"referenceName": "sdlh_postgresql_db_table",
 												"type": "DatasetReference",
 												"parameters": {
 													"SCHEMA_NAME": {
@@ -899,7 +899,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"source": {
-									"type": "PostgreSqlSource",
+									"type": "PostgreSqlV2Source",
 									"query": {
 										"value": "SELECT\n\tCASE\n\t\tWHEN MAX(\"@{item().WATERMARK_COLUMN}\") IS NULL THEN '1900-01-01 00:00:00'\n\t\tELSE MAX(\"@{item().WATERMARK_COLUMN}\")\n\tEND AS NEW_WATERMARK_VALUE\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\"\n",
 										"type": "Expression"
@@ -909,12 +909,28 @@
 									"referenceName": "sdlh_postgresql_db_table",
 									"type": "DatasetReference",
 									"parameters": {
-										"SOURCE_CONNECTION_STRING": {
-											"value": "@item().SOURCE_CONNECTION_STRING",
+										"SCHEMA_NAME": "na",
+										"TABLE_NAME": "na",
+										"SERVER_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[0], 'Server=', '')",
 											"type": "Expression"
 										},
-										"SCHEMA_NAME": "NA",
-										"TABLE_NAME": "NA"
+										"PORT": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[1], 'Port=', '')",
+											"type": "Expression"
+										},
+										"DATABASE_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[2], 'Database=', '')",
+											"type": "Expression"
+										},
+										"USER_NAME": {
+											"value": "@replace(split(activity('get_connection_details').output.value, ';')[3], 'UID=', '')",
+											"type": "Expression"
+										},
+										"PASSWORD_SECRET": {
+											"value": "@split(item().SOURCE_CONNECTION_STRING, ',')[1]",
+											"type": "Expression"
+										}
 									}
 								},
 								"firstRowOnly": true

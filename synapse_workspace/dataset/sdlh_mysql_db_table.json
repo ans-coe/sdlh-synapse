@@ -5,17 +5,45 @@
 			"referenceName": "mysql_sdlh_shir",
 			"type": "LinkedServiceReference",
 			"parameters": {
-				"CONNECTION_STRING_SECRET_NAME": {
-					"value": "@dataset().SOURCE_CONNECTION_STRING",
+				"SERVER_NAME": {
+					"value": "@dataset().SERVER_NAME",
+					"type": "Expression"
+				},
+				"PORT": {
+					"value": "@dataset().PORT",
+					"type": "Expression"
+				},
+				"DATABASE_NAME": {
+					"value": "@dataset().DATABASE_NAME",
+					"type": "Expression"
+				},
+				"USER_NAME": {
+					"value": "@dataset().USER_NAME",
+					"type": "Expression"
+				},
+				"PASSWORD_SECRET": {
+					"value": "@dataset().PASSWORD_SECRET",
 					"type": "Expression"
 				}
 			}
 		},
 		"parameters": {
-			"SOURCE_CONNECTION_STRING": {
+			"TABLE_NAME": {
 				"type": "string"
 			},
-			"TABLE_NAME": {
+			"SERVER_NAME": {
+				"type": "string"
+			},
+			"PORT": {
+				"type": "string"
+			},
+			"DATABASE_NAME": {
+				"type": "string"
+			},
+			"USER_NAME": {
+				"type": "string"
+			},
+			"PASSWORD_SECRET": {
 				"type": "string"
 			}
 		},
