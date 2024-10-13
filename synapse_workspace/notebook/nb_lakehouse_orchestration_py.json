@@ -106,10 +106,16 @@
 					"   <td>Andrei Dumitru</td>\n",
 					"   <td>2024-10-01</td>\n",
 					"   <td>2.2.15</td>\n",
-					"   <td>Updated notebook to be compatible with both Spark 3.3 and 3.4 <br>dynamically, when calling the raw to enriched function. </td>\n",
+					"   <td>Updated notebook to be compatible with both Spark 3.3 and 3.4 <br>dynamically, when calling the raw to enriched function.</td>\n",
 					"   <td></td>\n",
 					"  </tr>\n",
-					"\n",
+					"  <tr>\n",
+					"   <td>Darren Price</td>\n",
+					"   <td>2024-10-11</td>\n",
+					"   <td>2.3.0</td>\n",
+					"   <td>Updated notebook with 4 new parameters to support: <p>(a) Capibility to support different datalake container names.<p>(b) Capibility to support recreating external tables.  <p>Also ordered the list of external tables to be created so they are created in order</td>\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -353,7 +359,11 @@
 					"PARAM_TRIGGERING_PIPELINE_NAME = \"\"\n",
 					"PARAM_TRIGGERING_PIPELINE_RUN_ID = \"\"\n",
 					"PARAM_TRIGGER_TYPE = \"\"\n",
-					"PARAM_TRIGGER_TIME = \"\""
+					"PARAM_TRIGGER_TIME = \"\"\n",
+					"PARAM_RECREATE_EXTERNAL_TABLES = \"\"\n",
+					"PARAM_CONTAINER_NAME_RAW = \"\"\n",
+					"PARAM_CONTAINER_NAME_ENRICHED = \"\"\n",
+					"PARAM_CONTAINER_NAME_CURATED = \"\""
 				],
 				"execution_count": 1
 			},
@@ -448,7 +458,12 @@
 					"\n",
 					"synapse_serverless_odbc_url = f\"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={synapse_serverless_server_fqdn},{sql_port};DATABASE=master;{odbc_options}\"\n",
 					"\n",
-					"datalake_staged_container = \"enriched\""
+					"recreate_external_tables = PARAM_RECREATE_EXTERNAL_TABLES\n",
+					"\n",
+					"datalake_container_raw = PARAM_CONTAINER_NAME_RAW\n",
+					"datalake_container_enriched = PARAM_CONTAINER_NAME_ENRICHED\n",
+					"datalake_container_curated = PARAM_CONTAINER_NAME_CURATED\n",
+					""
 				],
 				"execution_count": 9
 			},
@@ -635,9 +650,7 @@
 				},
 				"source": [
 					"df_objects_metadata_extracted = deserialize_json_meta_to_notebook_etl_relational_meta(azuresql_server_odbc_url, sql_access_token_odbc)[0]\n",
-					"df_information_schema = deserialize_json_meta_to_notebook_etl_relational_meta(azuresql_server_odbc_url, sql_access_token_odbc)[1]\n",
-					"\n",
-					"#display(df_objects_metadata_extracted)"
+					"df_information_schema = deserialize_json_meta_to_notebook_etl_relational_meta(azuresql_server_odbc_url, sql_access_token_odbc)[1]"
 				],
 				"execution_count": 13
 			},
@@ -668,7 +681,7 @@
 					}
 				},
 				"source": [
-					"staged_instructions = get_raw_staged_etl_instructions(datalake_staged_container, datalake_storage_name, spark_version_short)"
+					"staged_instructions = get_raw_staged_etl_instructions(datalake_storage_name, datalake_container_raw, datalake_container_enriched, spark_version_short)"
 				],
 				"execution_count": 16
 			},
@@ -704,8 +717,10 @@
 				"source": [
 					"information_schemas = map_data_types(df_information_schema)\n",
 					"\n",
-					"tables_list = information_schemas.select('TABLE_NAME').distinct().rdd.flatMap(lambda x:x).collect()#etl_queue\n",
-					"external_tables_instructions = ext_table_mapping(tables_list, information_schemas, staged_instructions, datalake_staged_container)"
+					"tables_list = sorted(set(information_schemas.select('TABLE_NAME').distinct().rdd.flatMap(lambda x:x).collect()))\n",
+					"print(tables_list)\n",
+					"\n",
+					"external_tables_instructions = ext_table_mapping(tables_list, information_schemas, staged_instructions, datalake_container_enriched)"
 				],
 				"execution_count": 17
 			},
@@ -819,7 +834,7 @@
 					}
 				},
 				"source": [
-					"create_serverless_databases_and_schemas(synapse_serverless_odbc_url, sql_access_token_odbc, datalake_storage_name, datalake_staged_container)"
+					"create_serverless_databases_and_schemas(synapse_serverless_odbc_url, sql_access_token_odbc, datalake_storage_name, datalake_container_raw, datalake_container_enriched, datalake_container_curated)"
 				],
 				"execution_count": 18
 			},
@@ -854,6 +869,7 @@
 					"## Here, we are looping through the table names in the tables_query_dictionary, and running the createView function for each one of them\n",
 					"## through JDBC, against the Serverless SQL DB.\n",
 					"list_errors = []\n",
+					"print(f\"\"\"Creating external tables with drop and create as: {recreate_external_tables}\"\"\")\n",
 					"for k in list(external_tables_instructions.keys()):\n",
 					"    input_table_name = k\n",
 					"    input_columns_meta = external_tables_instructions.get(k)[\"TABLE_QUERY\"]\n",
@@ -863,9 +879,9 @@
 					"    input_external_data_source_name = external_tables_instructions.get(k)[\"EXTERNAL_DATA_SOURCE\"]\n",
 					"\n",
 					"    try:\n",
-					"        ext_table_definition = produce_external_table_definition(database_name = input_database_name, schema_name=input_schema_name, table_name=input_table_name, file_system=datalake_staged_container, data_source=input_external_data_source_name, location=input_file_path, columns_meta=input_columns_meta)\n",
+					"        ext_table_definition = produce_external_table_definition(recreate_external_tables, database_name = input_database_name, schema_name=input_schema_name, table_name=input_table_name, file_system=datalake_container_enriched, data_source=input_external_data_source_name, location=input_file_path, columns_meta=input_columns_meta)\n",
 					"        create_external_table(synapse_serverless_odbc_url, sql_access_token_odbc, str(input_database_name), ext_table_definition)\n",
-					"        print(f\"\"\"Completed Table: {input_table_name}\"\"\")\n",
+					"        print(f\"\"\"Completed External Table: {input_table_name}\"\"\")\n",
 					"    except Exception as err_message:\n",
 					"        print(err_message)\n",
 					"        list_errors.append({\"table_name\": input_table_name, \"error\":err_message})\n",

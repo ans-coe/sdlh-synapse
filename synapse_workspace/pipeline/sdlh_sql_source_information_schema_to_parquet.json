@@ -1,0 +1,2096 @@
+{
+	"name": "sdlh_sql_source_information_schema_to_parquet",
+	"properties": {
+		"activities": [
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "lookup_sql_etl_metadata",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_TYPE & SOURCE_SYSTEM",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 60,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT *\nFROM ETL.BaseMetadata\nWHERE SOURCE_TYPE = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND SOURCE_SYSTEM = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "BaseMetadata"
+						}
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "switch_source_type",
+				"description": "Select the correct source type based on the PARAM_SOURCE_TYPE",
+				"type": "Switch",
+				"dependsOn": [
+					{
+						"activity": "lookup_sql_etl_metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"on": {
+						"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+						"type": "Expression"
+					},
+					"cases": [
+						{
+							"value": "SQL_SERVER",
+							"activities": [
+								{
+									"name": "sql_sqlserver_copy_tables",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "SqlServerSource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[TABLE_TYPE]\nFROM INFORMATION_SCHEMA.TABLES\nORDER BY TABLE_SCHEMA, TABLE_NAME",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_sql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_sqlserver_copy_columns",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "SqlServerSource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[COLUMN_NAME]\n    ,[ORDINAL_POSITION]\n    ,[COLUMN_DEFAULT]\n    ,[IS_NULLABLE]\n    ,[DATA_TYPE]\n    ,[CHARACTER_MAXIMUM_LENGTH]\n    ,[NUMERIC_PRECISION]\n    ,[NUMERIC_SCALE]\n    ,[DATETIME_PRECISION]\n    ,[CHARACTER_SET_NAME]\n    ,[COLLATION_NAME]\nFROM information_schema.columns\nORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_sql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_sqlserver_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_sqlserver_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_sqlserver_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_sqlserver_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "AZURE_SQL",
+							"activities": [
+								{
+									"name": "sql_azuresql_copy_tables",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[TABLE_TYPE]\nFROM INFORMATION_SCHEMA.TABLES\nORDER BY TABLE_SCHEMA, TABLE_NAME",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_azuresql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_azuresql_copy_columns",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[COLUMN_NAME]\n    ,[ORDINAL_POSITION]\n    ,[COLUMN_DEFAULT]\n    ,[IS_NULLABLE]\n    ,[DATA_TYPE]\n    ,[CHARACTER_MAXIMUM_LENGTH]\n    ,[NUMERIC_PRECISION]\n    ,[NUMERIC_SCALE]\n    ,[DATETIME_PRECISION]\n    ,[CHARACTER_SET_NAME]\n    ,[COLLATION_NAME]\nFROM information_schema.columns\nORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_azuresql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_azuresql_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_azuresql_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_azuresql_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_azuresql_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "MY_SQL",
+							"activities": [
+								{
+									"name": "get_connection_details_mysql",
+									"description": "Web activity that performs a GET API request to Azure Key Vault to retrieve the connection details specific to each data source. ",
+									"type": "WebActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": true,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"url": {
+											"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI, 'secrets/', split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[0],'?api-version=7.0')",
+											"type": "Expression"
+										},
+										"connectVia": {
+											"referenceName": "AutoResolveIntegrationRuntime",
+											"type": "IntegrationRuntimeReference"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://vault.azure.net"
+										}
+									}
+								},
+								{
+									"name": "sql_mysql_copy_tables",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "get_connection_details_mysql",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "MySqlSource",
+											"query": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,TABLE_SCHEMA AS TABLE_CATALOG\n    ,TABLE_NAME\n    ,TABLE_TYPE\nFROM INFORMATION_SCHEMA.TABLES\nWHERE TABLE_SCHEMA != 'mysql'\nAND TABLE_SCHEMA != 'sys'\nAND TABLE_SCHEMA != 'information_schema'\nAND TABLE_SCHEMA != 'performance_schema'\nORDER BY TABLE_SCHEMA, TABLE_NAME",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_mysql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"TABLE_NAME": "NA",
+												"SERVER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[0], 'Server=', '')",
+													"type": "Expression"
+												},
+												"PORT": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[1], 'Port=', '')",
+													"type": "Expression"
+												},
+												"DATABASE_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[2], 'Database=', '')",
+													"type": "Expression"
+												},
+												"USER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[3], 'UID=', '')",
+													"type": "Expression"
+												},
+												"PASSWORD_SECRET": {
+													"value": "@split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[1]",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_mysql_copy_columns",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "get_connection_details_mysql",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "MySqlSource",
+											"query": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,TABLE_SCHEMA AS TABLE_CATALOG\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,ORDINAL_POSITION\n    ,COLUMN_DEFAULT\n    ,IS_NULLABLE\n    ,DATA_TYPE\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CAST(NUMERIC_PRECISION AS SIGNED) AS NUMERIC_PRECISION\n    ,CAST(NUMERIC_SCALE AS SIGNED) AS NUMERIC_SCALE\n    ,DATETIME_PRECISION\n    ,CHARACTER_SET_NAME\n    ,COLLATION_NAME\nFROM information_schema.columns\nWHERE TABLE_SCHEMA != 'mysql'\nAND TABLE_SCHEMA != 'sys'\nAND TABLE_SCHEMA != 'information_schema'\nAND TABLE_SCHEMA != 'performance_schema'\nORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_mysql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"TABLE_NAME": "NA",
+												"SERVER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[0], 'Server=', '')",
+													"type": "Expression"
+												},
+												"PORT": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[1], 'Port=', '')",
+													"type": "Expression"
+												},
+												"DATABASE_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[2], 'Database=', '')",
+													"type": "Expression"
+												},
+												"USER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_mysql').output.value, ';')[3], 'UID=', '')",
+													"type": "Expression"
+												},
+												"PASSWORD_SECRET": {
+													"value": "@split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[1]",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_mysql_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_mysql_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_mysql_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_mysql_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "POSTGRE_SQL",
+							"activities": [
+								{
+									"name": "get_connection_details_postgresql",
+									"description": "Web activity that performs a GET API request to Azure Key Vault to retrieve the connection details specific to each data source. ",
+									"type": "WebActivity",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": true,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"url": {
+											"value": "@concat(activity('lookup_pipeline_parameters').output.firstRow.KEY_VAULT_URI, 'secrets/', split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[0],'?api-version=7.0')",
+											"type": "Expression"
+										},
+										"connectVia": {
+											"referenceName": "AutoResolveIntegrationRuntime",
+											"type": "IntegrationRuntimeReference"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://vault.azure.net"
+										}
+									}
+								},
+								{
+									"name": "sql_postgresql_copy_tables",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "get_connection_details_postgresql",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS \"SOURCE_TYPE\"\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS \"SOURCE_SYSTEM\"\n    ,TABLE_CATALOG AS \"TABLE_CATALOG\"\n    ,TABLE_SCHEMA AS \"TABLE_SCHEMA\"\n    ,TABLE_NAME AS \"TABLE_NAME\"\n    ,TABLE_TYPE AS \"TABLE_TYPE\"\nFROM INFORMATION_SCHEMA.TABLES\nWHERE TABLE_SCHEMA != 'information_schema'\nAND TABLE_SCHEMA != 'pg_catalog'\nORDER BY TABLE_SCHEMA, TABLE_NAME",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_postgresql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA",
+												"SERVER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[0], 'Server=', '')",
+													"type": "Expression"
+												},
+												"PORT": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[1], 'Port=', '')",
+													"type": "Expression"
+												},
+												"DATABASE_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[2], 'Database=', '')",
+													"type": "Expression"
+												},
+												"USER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[3], 'UID=', '')",
+													"type": "Expression"
+												},
+												"PASSWORD_SECRET": {
+													"value": "@split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[1]",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_postgresql_copy_columns",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "get_connection_details_postgresql",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "PostgreSqlV2Source",
+											"query": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS \"SOURCE_TYPE\"\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS \"SOURCE_SYSTEM\"\n    ,TABLE_CATALOG AS \"TABLE_CATALOG\"\n    ,TABLE_SCHEMA AS \"TABLE_SCHEMA\"\n    ,TABLE_NAME AS \"TABLE_NAME\"\n    ,COLUMN_NAME AS \"COLUMN_NAME\"\n    ,ORDINAL_POSITION AS \"ORDINAL_POSITION\"\n    ,COLUMN_DEFAULT AS \"COLUMN_DEFAULT\"\n    ,IS_NULLABLE AS \"IS_NULLABLE\"\n    ,DATA_TYPE AS \"DATA_TYPE\"\n    ,CHARACTER_MAXIMUM_LENGTH AS \"CHARACTER_MAXIMUM_LENGTH\"\n    ,NUMERIC_PRECISION AS \"NUMERIC_PRECISION\"\n    ,NUMERIC_SCALE AS \"NUMERIC_SCALE\"\n    ,DATETIME_PRECISION AS \"DATETIME_PRECISION\"\n    ,CHARACTER_SET_NAME AS \"CHARACTER_SET_NAME\"\n    ,COLLATION_NAME AS \"COLLATION_NAME\"\nFROM information_schema.columns\nWHERE TABLE_SCHEMA != 'information_schema'\nAND TABLE_SCHEMA != 'pg_catalog'\nORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_postgresql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA",
+												"SERVER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[0], 'Server=', '')",
+													"type": "Expression"
+												},
+												"PORT": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[1], 'Port=', '')",
+													"type": "Expression"
+												},
+												"DATABASE_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[2], 'Database=', '')",
+													"type": "Expression"
+												},
+												"USER_NAME": {
+													"value": "@replace(split(activity('get_connection_details_postgresql').output.value, ';')[3], 'UID=', '')",
+													"type": "Expression"
+												},
+												"PASSWORD_SECRET": {
+													"value": "@split(activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING, ',')[1]",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_postgre_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_postgresql_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_postgre_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_postgresql_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "AZURE_SQL_MI",
+							"activities": [
+								{
+									"name": "sql_azuresqlmi_copy_tables",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "SqlMISource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[TABLE_TYPE]\nFROM INFORMATION_SCHEMA.TABLES\nORDER BY TABLE_SCHEMA, TABLE_NAME",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_azuresqlmi_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_azuresqlmi_copy_columns",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "SqlMISource",
+											"sqlReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,[TABLE_CATALOG]\n    ,[TABLE_SCHEMA]\n    ,[TABLE_NAME]\n    ,[COLUMN_NAME]\n    ,[ORDINAL_POSITION]\n    ,[COLUMN_DEFAULT]\n    ,[IS_NULLABLE]\n    ,[DATA_TYPE]\n    ,[CHARACTER_MAXIMUM_LENGTH]\n    ,[NUMERIC_PRECISION]\n    ,[NUMERIC_SCALE]\n    ,[DATETIME_PRECISION]\n    ,[CHARACTER_SET_NAME]\n    ,[COLLATION_NAME]\nFROM information_schema.columns\nORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_azuresqlmi_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_azuresqlmi_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_azuresqlmi_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_azuresqlmi_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_azuresqlmi_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						},
+						{
+							"value": "ORACLE_SQL",
+							"activities": [
+								{
+									"name": "sql_oraclesql_copy_tables",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "OracleSource",
+											"oracleReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,'@{activity('lookup_sql_etl_metadata').output.firstRow.DATABASE_NAME}' AS TABLE_CATALOG\n    ,OWNER AS TABLE_SCHEMA\n    ,TABLE_NAME\n    ,'BASE TABLE' AS TABLE_TYPE\nFROM ALL_TABLES\nWHERE OWNER != 'SYS'\nAND OWNER != 'SYSTEM'\nAND OWNER != 'XDB'\nAND OWNER != 'MDSYS'\nAND OWNER != 'CTXSYS'\nAND OWNER != 'SDE'\n\nUNION\n\nSELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,'@{activity('lookup_sql_etl_metadata').output.firstRow.DATABASE_NAME}' AS TABLE_CATALOG\n    ,OWNER AS TABLE_SCHEMA\n    ,VIEW_NAME AS TABLE_NAME \n    ,'VIEW' AS TABLE_TYPE\nFROM ALL_VIEWS\nWHERE OWNER != 'SYS'\nAND OWNER != 'SYSTEM'\nAND OWNER != 'XDB'\nAND OWNER != 'MDSYS'\nAND OWNER != 'CTXSYS'\nAND OWNER != 'SDE'",
+												"type": "Expression"
+											},
+											"partitionOption": "None",
+											"convertDecimalToInteger": true,
+											"queryTimeout": "02:00:00"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_oraclesql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/tables/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_oraclesql_copy_columns",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 3,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "OracleSource",
+											"oracleReaderQuery": {
+												"value": "SELECT\n    '@{pipeline().parameters.PARAM_SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{pipeline().parameters.PARAM_SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,'@{activity('lookup_sql_etl_metadata').output.firstRow.DATABASE_NAME}' AS TABLE_CATALOG\n    ,OWNER AS TABLE_SCHEMA\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,CAST(COLUMN_ID AS NUMBER(10)) AS ORDINAL_POSITION\n    ,NULL AS COLUMN_DEFAULT\n    ,NULLABLE AS IS_NULLABLE\n    ,DATA_TYPE\n    ,CAST(CHAR_LENGTH AS NUMBER(10)) AS CHARACTER_MAXIMUM_LENGTH\n    ,CAST(DATA_PRECISION AS NUMBER(10)) AS NUMERIC_PRECISION\n    ,CAST(DATA_SCALE AS NUMBER(10)) AS NUMERIC_SCALE\n    ,NULL AS DATETIME_PRECISION\n    ,CHARACTER_SET_NAME\n    ,COLLATION AS COLLATION_NAME\nFROM ALL_TAB_COLUMNS\nWHERE OWNER != 'SYS'\nAND OWNER != 'SYSTEM'\nAND OWNER != 'XDB'\nAND OWNER != 'MDSYS'\nAND OWNER != 'CTXSYS'\nAND OWNER != 'SDE'\nORDER BY OWNER, TABLE_NAME, COLUMN_ID",
+												"type": "Expression"
+											},
+											"partitionOption": "None",
+											"convertDecimalToInteger": true,
+											"queryTimeout": "02:00:00"
+										},
+										"sink": {
+											"type": "ParquetSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "ParquetWriteSettings"
+											}
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "sdlh_oraclesql_db_table",
+											"type": "DatasetReference",
+											"parameters": {
+												"SOURCE_CONNECTION_STRING": {
+													"value": "@activity('lookup_sql_etl_metadata').output.firstRow.SOURCE_CONNECTION_STRING",
+													"type": "Expression"
+												},
+												"SCHEMA_NAME": "NA",
+												"TABLE_NAME": "NA"
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "sdlh_gen2_parquet_snappy",
+											"type": "DatasetReference",
+											"parameters": {
+												"FP0": "metadata",
+												"FP1": "source_sql_information_schema/columns/",
+												"OBJECT_NAME": {
+													"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "sql_oraclesql_generate_curated_view_columns",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_oraclesql_copy_columns",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_columns",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/columns/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								},
+								{
+									"name": "sql_oraclesql_generate_curated_view_tables",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "sql_oraclesql_copy_tables",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.01:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 60,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[Config].[usp_CreateOrAlterViewOpenrowset]",
+										"storedProcedureParameters": {
+											"PARAM_TARGET_DATABASE_NAME": {
+												"value": "metadata",
+												"type": "String"
+											},
+											"PARAM_TARGET_SCHEMA_NAME": {
+												"value": "Config",
+												"type": "String"
+											},
+											"PARAM_TARGET_VIEW_NAME": {
+												"value": "vw_source_sql_information_schema_tables",
+												"type": "String"
+											},
+											"PARAM_ADLS_LOCATION_PATH": {
+												"value": "source_sql_information_schema/tables/**",
+												"type": "String"
+											},
+											"PARAM_EXTERNAL_DATA_SOURCE": {
+												"value": "exds_gen2_metadata",
+												"type": "String"
+											},
+											"PARAM_FORMAT": {
+												"value": "PARQUET",
+												"type": "String"
+											},
+											"PARAM_CSV_PARSER_VERSION": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDTERMINATOR": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_HEADER_ROW": {
+												"value": "false",
+												"type": "Boolean"
+											},
+											"PARAM_CSV_FIRSTROW": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_FIELDQUOTE": {
+												"value": "NA",
+												"type": "String"
+											},
+											"PARAM_CSV_ESCAPECHAR": {
+												"value": "NA",
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "synapse_sql_serverless_azir",
+										"type": "LinkedServiceReference",
+										"parameters": {
+											"CONNECTION_STRING_SECRET_NAME": "synapse-sql-serverless-connection-string-001"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/SQL_Services/_Common"
+		},
+		"annotations": []
+	}
+}

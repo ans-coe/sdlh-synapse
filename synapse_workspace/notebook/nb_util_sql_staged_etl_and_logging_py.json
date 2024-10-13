@@ -119,6 +119,13 @@
 					"   <td>Added an extra parameter \"spark_version:float\" to the \"raw_to_staged_etl_plus_logging\" function.<br> Updated the function to produce etl_action before etl_timestamp columns. <br> Added SOURCE_TYPE column as a result of the information schema metadata unpacking.</td>\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Darren Price</td>\n",
+					"   <td>2024-10-11</td>\n",
+					"   <td>2.3.0</td>\n",
+					"   <td>Updated notebook with 4 new parameters to support: <p>(a) Capibility to support different datalake container names.<p>(b) Capibility to support recreating external tables.\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -228,13 +235,13 @@
 					}
 				},
 				"source": [
-					"def get_raw_staged_etl_instructions(adls_container:str, adls_name:str, spark_version:float) -> dict:\n",
+					"def get_raw_staged_etl_instructions(adls_name:str, adls_container_raw:str, adls_container_enriched:str, spark_version:float) -> dict:\n",
 					"    \"\"\"\n",
 					"    Given the ADLS container and name, it'll take the df_objects_metadata_extracted dataframe and parse all the info into a python\n",
 					"    dictionary staged_instructions. This dictionary contains all the info needed to perform ETL from raw to enriched.\n",
 					"\n",
 					"    Parameters:\n",
-					"    - adls_container (str): The enriched storage account container name as a string.\n",
+					"    - adls_container_enriched (str): The enriched storage account container name as a string.\n",
 					"    - adls_name (str): The storage account name as a string.\n",
 					"\n",
 					"    Returns:\n",
@@ -242,7 +249,7 @@
 					"\n",
 					"    \"\"\"\n",
 					"    # Mount onto the enriched container\n",
-					"    JOB_ID = synapse_adls_remount(adls_container, adls_name, \"datalake_data_azir\")\n",
+					"    JOB_ID = synapse_adls_remount(adls_container_enriched, adls_name, \"datalake_data_azir\")\n",
 					"\n",
 					"    # Get the mounting prefix based on Spark version\n",
 					"    if spark_version <= 3.3:\n",
@@ -260,7 +267,7 @@
 					"                                                        \"SERVERLESS_SQL_POOL_SCHEMA\",  \\\n",
 					"                                                        \"LOAD_TYPE\", \\\n",
 					"                                                        \"PRIMARY_KEYS\", \\\n",
-					"                                                        f\"CONCAT('abfss://raw@{adls_name}.dfs.core.windows.net/', FP1_RAW) AS RAW_PATH\",\\\n",
+					"                                                        f\"CONCAT('abfss://{adls_container_raw}@{adls_name}.dfs.core.windows.net/', FP1_RAW) AS RAW_PATH\",\\\n",
 					"                                                        f\"CONCAT('{mounting_prefix}/{JOB_ID}/mount/', FP1_STAGED) AS STAGED_PATH\")\\\n",
 					"                                  .rdd.map(lambda x: (x[0], x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10])).collect()\n",
 					"    tables_migrated_raw=list(tables_migrated_raw)\n",
@@ -302,7 +309,6 @@
 					}
 				},
 				"source": [
-					"#not logged\n",
 					"def synapse_adls_remount(file_system_name:str, datalake_name:str, linked_service_name:str)->str:\n",
 					"    \"\"\"\n",
 					"    Mounts an Azure Data Lake Storage Gen2 filesystem using the specified file_system_name, datalake_name, and \n",

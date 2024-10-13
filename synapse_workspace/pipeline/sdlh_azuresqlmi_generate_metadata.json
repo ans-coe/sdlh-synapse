@@ -214,7 +214,7 @@
 								"source": {
 									"type": "SqlMISource",
 									"sqlReaderQuery": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(LOWER(COLUMN_NAME))), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\n    ,CASE\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('CT.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        ELSE NULL\n    END AS COLUMN_WITH_ALIAS_CHANGE_TRACKING\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS_CHANGE_TRACKING AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META_CHANGE_TRACKING\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_LIST\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n    ),1,0,''), '&amp;', '&'), '&lt;', ''), '&gt;', '') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.TABLE_NAME",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN UPPER(DATA_TYPE) = 'DECIMAL' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        WHEN UPPER(DATA_TYPE) = 'NUMERIC' THEN CONCAT(DATA_TYPE, '(', NUMERIC_PRECISION, ',' , NUMERIC_SCALE, ')')\n        ELSE DATA_TYPE\n    END AS DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(COLUMN_NAME)), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM INFORMATION_SCHEMA.COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND TABLE_SCHEMA = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})),\n\ncte_col_with_alias AS (\nSELECT *\n    ,CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']') AS COLUMN_WITH_ALIAS\n    ,CASE\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('CT.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        WHEN '@{item().LOAD_TYPE}' = 'CHANGE_TRACKING' AND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().PRIMARY_KEYS, null), '-1', item().PRIMARY_KEYS), ',' , ''','''), '''')}) THEN CONCAT('S.[',COLUMN_NAME,']', ' AS ' , '[', COLUMN_ALIAS,']')\n        ELSE NULL\n    END AS COLUMN_WITH_ALIAS_CHANGE_TRACKING\nFROM CTE_ALIAS)\n\nSELECT\n    TABLE_NAME\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_WITH_ALIAS_CHANGE_TRACKING AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META_CHANGE_TRACKING\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT ',' + CAST(COLUMN_NAME AS varchar(max))\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n        ),1,1,''), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_LIST\n    ,REPLACE(REPLACE(REPLACE(STUFF((\n        SELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH\n        FROM cte_col_with_alias AS innerTable\n        WHERE innerTable.TABLE_NAME = p.TABLE_NAME\n        FOR XML PATH('')\n    ),1,0,''), '&amp;', '&'), '&lt;', ''), '&gt;', '') AS INFORMATION_SCHEMA\nFROM cte_col_with_alias AS p\nGROUP BY p.TABLE_NAME",
 										"type": "Expression"
 									},
 									"queryTimeout": "02:00:00",
@@ -910,6 +910,20 @@
 								"type": "Expression"
 							},
 							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_RAW": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_ENRICHED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
+								"type": "Expression"
+							},
+							"type": "String"
 						}
 					}
 				},
@@ -953,6 +967,14 @@
 			"PARAM_SOURCE_GROUPING_ID_END": {
 				"type": "int",
 				"defaultValue": 100
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string",
+				"defaultValue": "enriched"
 			}
 		},
 		"folder": {

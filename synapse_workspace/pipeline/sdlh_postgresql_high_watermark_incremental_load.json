@@ -797,7 +797,7 @@
 											"source": {
 												"type": "PostgreSqlV2Source",
 												"query": {
-													"value": "SELECT @{item().COLUMNS_META}\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)",
+													"value": "SELECT @{item().COLUMNS_META}\nFROM \"@{item().SCHEMA_NAME}\".\"@{item().TABLE_NAME}\" S\nWHERE \"@{item().WATERMARK_COLUMN}\" > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS TIMESTAMP)\nAND \"@{item().WATERMARK_COLUMN}\" <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS TIMESTAMP)",
 													"type": "Expression"
 												}
 											},

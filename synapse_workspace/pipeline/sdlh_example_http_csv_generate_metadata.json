@@ -78,6 +78,20 @@
 								"type": "Expression"
 							},
 							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_RAW": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_ENRICHED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
+								"type": "Expression"
+							},
+							"type": "String"
 						}
 					}
 				},
@@ -1095,6 +1109,14 @@
 			"PARAM_CREATE_LAKEHOUSE_BASE_CONFIG": {
 				"type": "bool",
 				"defaultValue": true
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string",
+				"defaultValue": "enriched"
 			}
 		},
 		"folder": {
