@@ -51,6 +51,27 @@
 								"type": "Expression"
 							},
 							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_RAW": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_ENRICHED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_CURATED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_CURATED",
+								"type": "Expression"
+							},
+							"type": "String"
 						}
 					}
 				},
@@ -105,10 +126,22 @@
 			},
 			"PARAM_TARGET_DATABASE_COLLATION": {
 				"type": "string",
-				"defaultValue": "Latin1_General_100_BIN2_UTF8"
+				"defaultValue": "Latin1_General_100_CI_AS_SC_UTF8"
 			},
 			"PARAM_TARGET_SCHEMA_NAME": {
 				"type": "string"
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string",
+				"defaultValue": "enriched"
+			},
+			"PARAM_CONTAINER_NAME_CURATED": {
+				"type": "string",
+				"defaultValue": "curated"
 			}
 		},
 		"folder": {

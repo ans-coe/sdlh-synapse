@@ -405,9 +405,9 @@
 										"userProperties": [],
 										"typeProperties": {
 											"source": {
-												"type": "AzureSqlSource",
+												"type": "MySqlSource",
 												"sqlReaderQuery": {
-													"value": "SELECT @{item().COLUMNS_META}\nFROM `@{item().TABLE_NAME}` S\nWHERE `@{item().WATERMARK_COLUMN}` > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)\nAND `@{item().WATERMARK_COLUMN}` <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS DATETIME2)",
+													"value": "SELECT @{item().COLUMNS_META}\nFROM `@{item().TABLE_NAME}` S\nWHERE `@{item().WATERMARK_COLUMN}` > CAST('@{formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS TIMESTAMP)\nAND `@{item().WATERMARK_COLUMN}` <= CAST('@{formatDateTime(activity('lookup_new_watermark_value').output.firstRow.NEW_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffff')}' AS TIMESTAMP)",
 													"type": "Expression"
 												},
 												"queryTimeout": "02:00:00",

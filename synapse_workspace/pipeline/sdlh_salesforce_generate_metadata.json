@@ -78,6 +78,20 @@
 								"type": "Expression"
 							},
 							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_RAW": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_ENRICHED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
+								"type": "Expression"
+							},
+							"type": "String"
 						}
 					}
 				},
@@ -1055,6 +1069,14 @@
 			},
 			"PARAM_ENVIRONMENT_URL": {
 				"type": "string"
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string",
+				"defaultValue": "enriched"
 			}
 		},
 		"folder": {

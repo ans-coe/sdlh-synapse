@@ -50,7 +50,10 @@
 							"typeProperties": {
 								"source": {
 									"type": "AzureSqlSource",
-									"sqlReaderQuery": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\r\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\r\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\r\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\r\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\r\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\r\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\r\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\r\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\r\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\r\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\r\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\r\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\r\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\r\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\r\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\r\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
+									"sqlReaderQuery": {
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\r\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\r\n    ,@{item().SOURCE_GROUPING_ID} AS SOURCE_GROUPING_ID\r\n    ,'@{item().IS_ENABLED}' AS IS_ENABLED\r\n    ,'@{item().LOAD_TYPE}' AS LOAD_TYPE\r\n    ,'@{item().BATCH_FREQUENCY}' AS BATCH_FREQUENCY\r\n    ,'@{item().SOURCE_CONNECTION_STRING}' AS SOURCE_CONNECTION_STRING\r\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\r\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\r\n    ,'@{item().TABLE_NAME}' AS TABLE_NAME\r\n    ,'@{item().PRIMARY_KEYS}' AS PRIMARY_KEYS\r\n    ,'@{item().WATERMARK_COLUMN}' AS WATERMARK_COLUMN\r\n    ,'@{item().SERVERLESS_SQL_POOL_DATABASE}' AS SERVERLESS_SQL_POOL_DATABASE\r\n    ,'@{item().SERVERLESS_SQL_POOL_SCHEMA}' AS SERVERLESS_SQL_POOL_SCHEMA\r\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_LIST}' AS COLUMNS_LIST\r\n    ,'@{activity('lookup_new_columns').output.firstRow.COLUMNS_META}' AS COLUMNS_META\r\n    ,'@{activity('lookup_new_columns').output.firstRow.INFORMATION_SCHEMA}' AS INFORMATION_SCHEMA",
+										"type": "Expression"
+									},
 									"queryTimeout": "02:00:00",
 									"partitionOption": "None"
 								},
@@ -123,7 +126,7 @@
 								"source": {
 									"type": "OracleSource",
 									"oracleReaderQuery": {
-										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')}) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' THEN 'varchar'\n        WHEN DATA_TYPE = 'DATE' THEN 'datetime'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION BETWEEN 1 AND 10 THEN 'int'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION = 20 THEN 'bigint'\n        WHEN DATA_TYPE = 'NUMBER' THEN 'numeric('||DATA_PRECISION||','||DATA_SCALE||')'\n        ELSE DATA_TYPE\n    END DATA_TYPE\n    ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'CHAR' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'NVARCHAR' THEN CHAR_LENGTH\n        ELSE NULL\n    END CHARACTER_MAXIMUM_LENGTH\nFROM ALL_TAB_COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND OWNER = '@{item().SCHEMA_NAME}'\nORDER BY COLUMN_ID",
+										"value": "SELECT '@{item().SOURCE_TYPE}' AS SOURCE_TYPE\n    ,'@{item().SOURCE_SYSTEM}' AS SOURCE_SYSTEM\n    ,CASE\n        WHEN COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')}) THEN 1\n        ELSE 0\n    END AS IS_ENABLED\n    ,'@{item().DATABASE_NAME}' AS DATABASE_NAME\n    ,'@{item().SCHEMA_NAME}' AS SCHEMA_NAME\n    ,TABLE_NAME\n    ,COLUMN_NAME\n    ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' THEN 'varchar'\n        WHEN DATA_TYPE = 'NVARCHAR2' THEN 'varchar'\n        WHEN DATA_TYPE = 'CHAR' AND CHAR_LENGTH = 0 THEN 'varchar'\n        WHEN DATA_TYPE = 'NCHAR' THEN 'varchar'\n        WHEN DATA_TYPE = 'CLOB' THEN 'varchar'\n        WHEN DATA_TYPE = 'NCLOB' THEN 'varchar'\n        WHEN DATA_TYPE = 'LONG' THEN 'varchar'\n        WHEN DATA_TYPE = 'DATE' THEN 'datetime'\n        WHEN DATA_TYPE = 'TIMESTAMP' THEN 'datetime2'\n        WHEN DATA_TYPE = 'TIMESTAMP WITH TIME ZONE' THEN 'datetime2'\n        WHEN DATA_TYPE = 'TIMESTAMP WITH LOCAL TIME ZONE' THEN 'datetime2'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION BETWEEN 1 AND 10 THEN 'int'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION = 20 THEN 'bigint'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE IS NULL THEN 'float'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_PRECISION IS NULL THEN 'float'\n        WHEN DATA_TYPE = 'NUMBER' THEN 'decimal('||DATA_PRECISION||','||DATA_SCALE||')'\n        ELSE LOWER(DATA_TYPE)\n    END DATA_TYPE\n   ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' AND CHAR_LENGTH = 0 THEN -1\n        WHEN DATA_TYPE = 'VARCHAR2' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'CHAR' AND CHAR_LENGTH = 0 THEN -1\n        WHEN DATA_TYPE = 'CHAR' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'NVARCHAR2' AND CHAR_LENGTH = 0 THEN -1\n        WHEN DATA_TYPE = 'NVARCHAR2' THEN CHAR_LENGTH*2\n        WHEN DATA_TYPE = 'CLOB' THEN -1\n        WHEN DATA_TYPE = 'NCLOB' THEN -1\n        WHEN DATA_TYPE = 'LONG' THEN -1\n        ELSE NULL\n    END CHARACTER_MAXIMUM_LENGTH\n    ,COLUMN_ID AS ORDINAL_POSITION\nFROM ALL_TAB_COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND OWNER = '@{item().SCHEMA_NAME}'\nORDER BY COLUMN_ID",
 										"type": "Expression"
 									},
 									"partitionOption": "None",
@@ -204,7 +207,7 @@
 								"source": {
 									"type": "OracleSource",
 									"oracleReaderQuery": {
-										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_ID\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'CHAR' THEN CHAR_LENGTH\n        WHEN DATA_TYPE = 'NVARCHAR' THEN CHAR_LENGTH\n        ELSE NULL\n    END CHARACTER_MAXIMUM_LENGTH\n    ,CASE\n        WHEN DATA_TYPE = 'VARCHAR2' THEN 'varchar'\n        WHEN DATA_TYPE = 'DATE' THEN 'datetime'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION BETWEEN 1 AND 10 THEN 'int'\n        WHEN DATA_TYPE = 'NUMBER' AND DATA_SCALE = 0 AND DATA_PRECISION = 20 THEN 'bigint'\n        WHEN DATA_TYPE = 'NUMBER' THEN 'DECIMAL('||DATA_PRECISION||','||DATA_SCALE||')'\n        ELSE DATA_TYPE\n    END DATA_TYPE\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(LOWER(COLUMN_NAME))), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM ALL_TAB_COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND OWNER = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})\nORDER BY COLUMN_ID\n),\n\ncte_col_with_alias AS (\nSELECT TABLE_NAME\n    ,COLUMN_ID\n    ,COLUMN_NAME\n    ,CHARACTER_MAXIMUM_LENGTH\n    ,DATA_TYPE\n    ,COLUMN_ALIAS\n    ,'S.\"'||COLUMN_NAME||'\"'||' AS '||'\"'||COLUMN_ALIAS||'\"' AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS\n)\n\nSELECT\n    TABLE_NAME\n    ,LISTAGG(COLUMN_WITH_ALIAS, ',') WITHIN GROUP (ORDER BY COLUMN_ID) AS COLUMNS_META\n    ,LISTAGG(COLUMN_NAME, ',') WITHIN GROUP (ORDER BY COLUMN_ID) AS COLUMNS_LIST\n    ,(SELECT JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME' VALUE COLUMN_NAME,'DATA_TYPE' VALUE DATA_TYPE,'CHARACTER_MAXIMUM_LENGTH' VALUE CHARACTER_MAXIMUM_LENGTH)returning clob)\n     FROM cte_col_with_alias ) AS INFORMATION_SCHEMA\nFROM cte_col_with_alias\nGROUP BY TABLE_NAME",
+										"value": "WITH CTE_ALIAS AS (\nSELECT TABLE_NAME\n    ,COLUMN_ID\n    ,REPLACE(COLUMN_NAME, '''', '''''') AS COLUMN_NAME\n    ,DATA_TYPE\n    ,CHAR_LENGTH\n    ,DATA_SCALE\n    ,DATA_PRECISION\n    ,REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(LTRIM(COLUMN_NAME)), ' ', '_'), ',', '_'), ';', '_'), '{', '_'), '}', '_'), '(', '_'), ')', '_'), '=', '_'), '''', '''''') AS COLUMN_ALIAS\nFROM ALL_TAB_COLUMNS\nWHERE TABLE_NAME = '@{item().TABLE_NAME}'\nAND OWNER = '@{item().SCHEMA_NAME}'\nAND COLUMN_NAME NOT IN (@{concat('''', replace(if(equals(item().COLUMNS_TO_EXCLUDE, null), '-1', item().COLUMNS_TO_EXCLUDE), ',' , ''','''), '''')})\nORDER BY COLUMN_ID\n),\n\ncte_col_with_alias AS (\nSELECT TABLE_NAME\n    ,COLUMN_ID\n    ,COLUMN_NAME\n    ,DATA_TYPE\n    ,CHAR_LENGTH\n    ,DATA_SCALE\n    ,DATA_PRECISION  \n    ,COLUMN_ALIAS\n    ,'S.\"'||COLUMN_NAME||'\"'||' AS '||'\"'||COLUMN_ALIAS||'\"' AS COLUMN_WITH_ALIAS\nFROM CTE_ALIAS\n)\n\nSELECT\n    TABLE_NAME\n    ,REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(XMLAGG(XMLELEMENT(e,COLUMN_WITH_ALIAS,', ').extract('//text()') ORDER BY COLUMN_ID).getclobval(),', '), '&quot;', '\"'), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_META\n    ,REPLACE(REPLACE(REPLACE(REPLACE(RTRIM(XMLAGG(XMLELEMENT(e,COLUMN_NAME,', ').extract('//text()') ORDER BY COLUMN_ID).getclobval(),', '), '&quot;', '\"'), '&amp;', '&'), '&lt;', '<'), '&gt;', '>') AS COLUMNS_LIST\n    ,(SELECT JSON_ARRAYAGG(JSON_OBJECT('COLUMN_NAME' VALUE COLUMN_NAME,'DATA_TYPE' VALUE DATA_TYPE,'CHAR_LENGTH' VALUE CHAR_LENGTH,'DATA_SCALE' VALUE DATA_SCALE,'DATA_PRECISION' VALUE DATA_PRECISION) RETURNING CLOB)\n    FROM cte_col_with_alias ) AS INFORMATION_SCHEMA\nFROM cte_col_with_alias\nGROUP BY TABLE_NAME",
 										"type": "Expression"
 									},
 									"partitionOption": "None",
@@ -854,6 +857,20 @@
 								"type": "Expression"
 							},
 							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_RAW": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+								"type": "Expression"
+							},
+							"type": "String"
+						},
+						"PARAM_CONTAINER_NAME_ENRICHED": {
+							"value": {
+								"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
+								"type": "Expression"
+							},
+							"type": "String"
 						}
 					}
 				},
@@ -897,6 +914,14 @@
 			"PARAM_SOURCE_GROUPING_ID_END": {
 				"type": "string",
 				"defaultValue": "100"
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string",
+				"defaultValue": "raw"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string",
+				"defaultValue": "enriched"
 			}
 		},
 		"folder": {
