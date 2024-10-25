@@ -37,8 +37,9 @@
 					"type": "Expression"
 				}
 			},
-			"sslMode": 2,
-			"authenticationType": "Basic"
+			"sslMode": 1,
+			"authenticationType": "Basic",
+			"commandTimeout": 300
 		},
 		"connectVia": {
 			"referenceName": "PARAM_SHIR_NAME",
