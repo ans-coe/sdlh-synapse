@@ -116,6 +116,13 @@
 					"   <td>Updated notebook with 4 new parameters to support: <p>(a) Capibility to support different datalake container names.<p>(b) Capibility to support recreating external tables.  <p>Also ordered the list of external tables to be created so they are created in order</td>\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Andrei Dumitru</td>\n",
+					"   <td>2024-10-21</td>\n",
+					"   <td>2.3.2</td>\n",
+					"   <td>Updated notebook to import the window functions and row_number libraries for CDC. <br> Reordered cells to avoid queue re-population issues in case of failure.</td>\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -225,8 +232,9 @@
 					"from queue import Queue\n",
 					"\n",
 					"import re\n",
-					"from pyspark.sql.functions import col, lit, regexp_replace, concat, collect_list\n",
-					"from pyspark.sql import SparkSession"
+					"from pyspark.sql.functions import col, lit, regexp_replace, concat, collect_list, row_number\n",
+					"from pyspark.sql import SparkSession\n",
+					"from pyspark.sql.window import Window"
 				],
 				"execution_count": 2
 			},
