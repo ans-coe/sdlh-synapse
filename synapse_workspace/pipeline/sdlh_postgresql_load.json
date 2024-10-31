@@ -129,7 +129,7 @@
 										"type": "Expression"
 									},
 									"PARAM_CONTAINER_NAME_ENRICHED": {
-										"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+										"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_ENRICHED",
 										"type": "Expression"
 									},
 									"PARAM_CONTAINER_NAME_CURATED": {
