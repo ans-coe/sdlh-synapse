@@ -243,6 +243,13 @@
 											"type": "Expression"
 										},
 										"type": "string"
+									},
+									"PARAM_SCHEMA_EVOLVES": {
+										"value": {
+											"value": "@pipeline().parameters.PARAM_SCHEMA_EVOLVES",
+											"type": "Expression"
+										},
+										"type": "bool"
 									}
 								},
 								"snapshot": true,
@@ -301,6 +308,10 @@
 			"PARAM_CONTAINER_NAME_CURATED": {
 				"type": "string",
 				"defaultValue": "curated"
+			},
+			"PARAM_SCHEMA_EVOLVES": {
+				"type": "bool",
+				"defaultValue": false
 			}
 		},
 		"variables": {

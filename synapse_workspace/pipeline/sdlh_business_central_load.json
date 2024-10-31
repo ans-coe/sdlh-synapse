@@ -129,6 +129,10 @@
 									"PARAM_CONTAINER_NAME_CURATED": {
 										"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_CURATED",
 										"type": "Expression"
+									},
+									"PARAM_SCHEMA_EVOLVES": {
+										"value": "@pipeline().parameters.PARAM_SCHEMA_EVOLVES",
+										"type": "Expression"
 									}
 								}
 							}
@@ -1420,6 +1424,9 @@
 			"PARAM_CONTAINER_NAME_CURATED": {
 				"type": "string",
 				"defaultValue": "curated"
+			},
+			"PARAM_SCHEMA_EVOLVES": {
+				"type": "bool"
 			}
 		},
 		"variables": {
