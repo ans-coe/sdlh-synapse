@@ -119,6 +119,26 @@
 									"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
 										"value": "@variables('VAR_TRIGGERING_PIPELINE_RUN_ID')",
 										"type": "Expression"
+									},
+									"PARAM_RECREATE_EXTERNAL_TABLES": {
+										"value": "@pipeline().parameters.PARAM_RECREATE_EXTERNAL_TABLES",
+										"type": "Expression"
+									},
+									"PARAM_CONTAINER_NAME_RAW": {
+										"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_RAW",
+										"type": "Expression"
+									},
+									"PARAM_CONTAINER_NAME_ENRICHED": {
+										"value": "@pipeline().parameters.PARAM_DEPLOY_ENRICHED_LAYER",
+										"type": "Expression"
+									},
+									"PARAM_CONTAINER_NAME_CURATED": {
+										"value": "@pipeline().parameters.PARAM_CONTAINER_NAME_CURATED",
+										"type": "Expression"
+									},
+									"PARAM_SCHEMA_EVOLVES": {
+										"value": "@pipeline().parameters.PARAM_SCHEMA_EVOLVES",
+										"type": "Expression"
 									}
 								}
 							}
@@ -1568,6 +1588,21 @@
 			"PARAM_ENABLE_LAST_RUN_CHECK": {
 				"type": "bool",
 				"defaultValue": true
+			},
+			"PARAM_RECREATE_EXTERNAL_TABLES": {
+				"type": "bool"
+			},
+			"PARAM_CONTAINER_NAME_RAW": {
+				"type": "string"
+			},
+			"PARAM_CONTAINER_NAME_ENRICHED": {
+				"type": "string"
+			},
+			"PARAM_CONTAINER_NAME_CURATED": {
+				"type": "string"
+			},
+			"PARAM_SCHEMA_EVOLVES": {
+				"type": "bool"
 			}
 		},
 		"variables": {

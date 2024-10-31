@@ -1398,6 +1398,9 @@
 			"PARAM_CONTAINER_NAME_CURATED": {
 				"type": "string",
 				"defaultValue": "curated"
+			},
+			"PARAM_SCHEMA_EVOLVES": {
+				"type": "bool"
 			}
 		},
 		"variables": {

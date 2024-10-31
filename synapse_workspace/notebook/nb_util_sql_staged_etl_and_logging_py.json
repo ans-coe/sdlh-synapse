@@ -133,6 +133,13 @@
 					"   <td>Updated notebook with a series of functions to support CDC data: <p>(a) rename_etl_action_column - in case the action column can't be renamed from the source to etl_action, <br>it's done through the metadata and this function.<p>(b) keep_latest_update - takes in 1 or more PK's and 1 or more sequencing (watermark) columns <br>to determine and keep only the latest update per primary key for the incremental data ingested.<p>(c) Updated the main ETL function to use these functions to deal with CDC data.\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Andrei Dumitru</td>\n",
+					"   <td>2024-10-29</td>\n",
+					"   <td>2.3.4</td>\n",
+					"   <td>Updated the metadata and ETL functions to add support for schema evolution where required.\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -982,7 +989,7 @@
 					}
 				},
 				"source": [
-					"def raw_to_staged_etl_plus_logging(table:str, storage_queue:str, trigger_time:str, trigger_type:str, pipeline_name:str, pipeline_run_id:str, staged_instructions:dict, spark_version:float):\n",
+					"def raw_to_staged_etl_plus_logging(table:str, schema_evolves:bool , storage_queue:str, trigger_time:str, trigger_type:str, pipeline_name:str, pipeline_run_id:str, staged_instructions:dict, spark_version:float):\n",
 					"    \"\"\"\n",
 					"    This function extracts data from a RAW source, transforms the data, and writes/merges it to a Delta table in Staged. \n",
 					"\n",
@@ -999,6 +1006,8 @@
 					"    Returns:\n",
 					"    - None\n",
 					"    \"\"\"\n",
+					"    # IMPORTANT: Set schema evolution to false.\n",
+					"    spark.conf.set(\"spark.databricks.delta.schema.autoMerge.enabled\", \"false\")\n",
 					"\n",
 					"    if spark_version <= 3.3:\n",
 					"        mounting_prefix = 'synfs:'\n",
@@ -1017,6 +1026,11 @@
 					"    staged_root_path = f\"{mounting_prefix}/{JOB_ID}/mount/{staged_instructions[table]['SERVERLESS_SQL_POOL_DATABASE']}/{staged_instructions[table]['SERVERLESS_SQL_POOL_SCHEMA']}\" #'synfs:/125/mount/synw_data_uks_dna_lakehouse/IHHO001/ab_asbestos_dtl/'},\n",
 					"    staged_existing_files = []\n",
 					"    start_time = datetime.utcnow()\n",
+					"\n",
+					"    # Set schema evolution to true only if needed.\n",
+					"    if schema_evolves == True:\n",
+					"        spark.conf.set(\"spark.databricks.delta.schema.autoMerge.enabled\", \"true\")\n",
+					"\n",
 					"\n",
 					"    try:\n",
 					"        staged_files_list = mssparkutils.fs.ls(staged_root_path)\n",

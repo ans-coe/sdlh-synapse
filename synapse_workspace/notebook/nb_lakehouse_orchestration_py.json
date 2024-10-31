@@ -123,6 +123,13 @@
 					"   <td>Updated notebook to import the window functions and row_number libraries for CDC. <br> Reordered cells to avoid queue re-population issues in case of failure.</td>\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Andrei Dumitru</td>\n",
+					"   <td>2024-10-29</td>\n",
+					"   <td>2.3.4</td>\n",
+					"   <td>Updated notebook to support schema evolution.</td>\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -369,6 +376,7 @@
 					"PARAM_TRIGGER_TYPE = \"\"\n",
 					"PARAM_TRIGGER_TIME = \"\"\n",
 					"PARAM_RECREATE_EXTERNAL_TABLES = \"\"\n",
+					"PARAM_SCHEMA_EVOLVES = \"\"\n",
 					"PARAM_CONTAINER_NAME_RAW = \"\"\n",
 					"PARAM_CONTAINER_NAME_ENRICHED = \"\"\n",
 					"PARAM_CONTAINER_NAME_CURATED = \"\""
@@ -764,7 +772,7 @@
 					"    tables_ingested_successfully = []\n",
 					"    print(\"Starting tables ingestion...\")\n",
 					"    for table in etl_queue:\n",
-					"        raw_to_staged_etl_plus_logging(table, PARAM_STORAGE_QUEUE_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_NAME, PARAM_PIPELINE_RUN_ID, staged_instructions, spark_version_short)\n",
+					"        raw_to_staged_etl_plus_logging(table, PARAM_SCHEMA_EVOLVES, PARAM_STORAGE_QUEUE_NAME, PARAM_TRIGGER_TIME, PARAM_TRIGGER_TYPE, PARAM_PIPELINE_NAME, PARAM_PIPELINE_RUN_ID, staged_instructions, spark_version_short)\n",
 					"        tables_ingested_successfully.append(table)\n",
 					"        print(f\"\"\"Completed Table: {table}\"\"\")\n",
 					"    print(\"All of the tables in the batch were ingested successfully.\")\n",
