@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "SELECT *\nFROM ETL.CurationMetadata\nWHERE CURATION_GROUPING_ID = '@{pipeline().parameters.PARAM_CURATION_GROUPING_ID}'\nAND CURATION_GROUPING_PRIORITY = '@{pipeline().parameters.PARAM_CURATION_GROUPING_PRIORITY}'",
+							"value": "SELECT *\nFROM ETL.CurationMetadata\nWHERE CURATION_GROUPING_ID = '@{pipeline().parameters.PARAM_CURATION_GROUPING_ID}'\nAND CURATION_GROUPING_PRIORITY = '@{pipeline().parameters.PARAM_CURATION_GROUPING_PRIORITY}'\nAND IS_ENABLED = 1",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
