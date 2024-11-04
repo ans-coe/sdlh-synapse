@@ -1590,19 +1590,24 @@
 				"defaultValue": true
 			},
 			"PARAM_RECREATE_EXTERNAL_TABLES": {
-				"type": "bool"
+				"type": "bool",
+				"defaultValue": false
 			},
 			"PARAM_CONTAINER_NAME_RAW": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "raw"
 			},
 			"PARAM_CONTAINER_NAME_ENRICHED": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "enriched"
 			},
 			"PARAM_CONTAINER_NAME_CURATED": {
-				"type": "string"
+				"type": "string",
+				"defaultValue": "curated"
 			},
 			"PARAM_SCHEMA_EVOLVES": {
-				"type": "bool"
+				"type": "bool",
+				"defaultValue": false
 			}
 		},
 		"variables": {

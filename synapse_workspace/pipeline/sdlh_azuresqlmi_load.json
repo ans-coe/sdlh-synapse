@@ -1765,7 +1765,8 @@
 				"defaultValue": "curated"
 			},
 			"PARAM_SCHEMA_EVOLVES": {
-				"type": "bool"
+				"type": "bool",
+				"defaultValue": false
 			}
 		},
 		"variables": {
