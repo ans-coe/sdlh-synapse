@@ -1,0 +1,51 @@
+{
+	"name": "sdlh_excel_sheet",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "datalake_data_azir",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"SPREADSHEET_NAME": {
+				"type": "string"
+			},
+			"SHEET_NAME": {
+				"type": "string"
+			},
+			"SOURCE_SYSTEM": {
+				"type": "string"
+			},
+			"XLSX_UPLOAD_CONTAINER": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/File_Services"
+		},
+		"annotations": [],
+		"type": "Excel",
+		"typeProperties": {
+			"sheetName": {
+				"value": "@dataset().SHEET_NAME",
+				"type": "Expression"
+			},
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@concat(dataset().SPREADSHEET_NAME, '.xlsx')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat('XLSX/',dataset().SOURCE_SYSTEM)",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().XLSX_UPLOAD_CONTAINER",
+					"type": "Expression"
+				}
+			},
+			"firstRowAsHeader": true
+		},
+		"schema": []
+	}
+}
