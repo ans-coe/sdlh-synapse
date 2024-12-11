@@ -250,6 +250,13 @@
 											"type": "Expression"
 										},
 										"type": "bool"
+									},
+									"PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES": {
+										"value": {
+											"value": "@pipeline().parameters.PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES",
+											"type": "Expression"
+										},
+										"type": "bool"
 									}
 								},
 								"snapshot": true,
@@ -310,6 +317,10 @@
 				"defaultValue": "curated"
 			},
 			"PARAM_SCHEMA_EVOLVES": {
+				"type": "bool",
+				"defaultValue": false
+			},
+			"PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES": {
 				"type": "bool",
 				"defaultValue": false
 			}
