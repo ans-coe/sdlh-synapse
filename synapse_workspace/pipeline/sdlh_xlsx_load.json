@@ -123,6 +123,10 @@
 									"PARAM_SCHEMA_EVOLVES": {
 										"value": "@pipeline().parameters.PARAM_SCHEMA_EVOLVES",
 										"type": "Expression"
+									},
+									"PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES": {
+										"value": "@pipeline().parameters.PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES",
+										"type": "Expression"
 									}
 								}
 							}
@@ -1030,8 +1034,8 @@
 				"defaultValue": true
 			},
 			"PARAM_RECREATE_EXTERNAL_TABLES": {
-				"type": "string",
-				"defaultValue": "false"
+				"type": "bool",
+				"defaultValue": false
 			},
 			"PARAM_CONTAINER_NAME_RAW": {
 				"type": "string",
@@ -1046,12 +1050,16 @@
 				"defaultValue": "curated"
 			},
 			"PARAM_SCHEMA_EVOLVES": {
-				"type": "string",
-				"defaultValue": "false"
+				"type": "bool",
+				"defaultValue": false
 			},
 			"PARAM_XLSX_UPLOAD_CONTAINER": {
 				"type": "string",
 				"defaultValue": "raw"
+			},
+			"PARAM_EXTRACT_SCHEMA_FROM_UNDERLYING_FILES": {
+				"type": "bool",
+				"defaultValue": false
 			}
 		},
 		"variables": {
