@@ -1,0 +1,39 @@
+{
+	"name": "rest_basic_sdlh_azir",
+	"properties": {
+		"parameters": {
+			"BASE_URL": {
+				"type": "string"
+			},
+			"USER_NAME": {
+				"type": "string"
+			},
+			"KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "@{linkedService().BASE_URL}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Basic",
+			"userName": "@{linkedService().USER_NAME}",
+			"password": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().KEYVAULT_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"connectVia": {
+			"referenceName": "AutoResolveIntegrationRuntime",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

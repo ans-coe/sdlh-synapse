@@ -1,0 +1,35 @@
+{
+	"name": "sdlh_rest_anonymous",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "rest_anonymous_sdlh_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"BASE_URL": {
+					"value": "@dataset().BASE_URL",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"BASE_URL": {
+				"type": "string"
+			},
+			"RELATIVE_URL": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": {
+				"value": "@dataset().RELATIVE_URL",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	}
+}
