@@ -1,0 +1,49 @@
+{
+	"name": "sdlh_rest_basic",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "rest_basic_sdlh_azir",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"BASE_URL": {
+					"value": "@dataset().BASE_URL",
+					"type": "Expression"
+				},
+				"USER_NAME": {
+					"value": "@dataset().USER_NAME",
+					"type": "Expression"
+				},
+				"KEYVAULT_SECRET_NAME": {
+					"value": "@dataset().KEYVAULT_SECRET_NAME",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"BASE_URL": {
+				"type": "string"
+			},
+			"RELATIVE_URL": {
+				"type": "string"
+			},
+			"USER_NAME": {
+				"type": "string"
+			},
+			"KEYVAULT_SECRET_NAME": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH/Web_Services"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"typeProperties": {
+			"relativeUrl": {
+				"value": "@dataset().RELATIVE_URL",
+				"type": "Expression"
+			}
+		},
+		"schema": []
+	}
+}
