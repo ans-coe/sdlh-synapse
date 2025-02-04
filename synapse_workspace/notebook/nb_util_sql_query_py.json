@@ -154,6 +154,13 @@
 					"   <td>Added a function to create external tables if the schema needs to be extracted straight from Delta files.<p> It also has the option to re-create or not the external table.\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"  <tr>\n",
+					"   <td>Tom Legge</td>\n",
+					"   <td>2025-02-04</td>\n",
+					"   <td>2.3.10</td>\n",
+					"   <td>Added a new data type to the mapping function 'sql_variant'.\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -387,7 +394,8 @@
 					"        \"numeric\": \"varchar(8000)\",\n",
 					"        \"json\": \"varchar(max)\",\n",
 					"        \"mediumtext\": \"varchar\",\n",
-					"        \"tinytext\": \"varchar\"\n",
+					"        \"tinytext\": \"varchar\",\n",
+					"        \"sql_variant\": \"varchar(8000)\"\n",
 					"    }\n",
 					"\n",
 					"    # UDF to map data types using the dictionary\n",
