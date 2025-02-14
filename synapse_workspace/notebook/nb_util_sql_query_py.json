@@ -161,6 +161,13 @@
 					"   <td>Added a new data type to the mapping function 'sql_variant'.\n",
 					"   <td></td>\n",
 					"  </tr>\n",
+					"    <tr>\n",
+					"   <td>Tom Legge</td>\n",
+					"   <td>2025-02-14</td>\n",
+					"   <td>2.3.11</td>\n",
+					"   <td>Updated mapping so that Azure_MI timestamp is also mapped to varbinary(8).\n",
+					"   <td></td>\n",
+					"  </tr>\n",
 					" </tbody>\n",
 					"</table>"
 				]
@@ -402,7 +409,7 @@
 					"    map_data_type_udf = udf(lambda data_type: data_type_mappings.get(data_type, data_type), StringType())\n",
 					"\n",
 					"    # Change 'timestamp' data type to 'varbinary(8)' for SQL Server source\n",
-					"    df = df.withColumn(\"DATA_TYPE\", when((col(\"SOURCE_TYPE\") == \"SQL_SERVER\") & (col(\"DATA_TYPE\") == \"timestamp\"), \"varbinary(8)\").otherwise(df[\"DATA_TYPE\"]))\n",
+					"    df = df.withColumn(\"DATA_TYPE\", when(((col(\"SOURCE_TYPE\") == \"SQL_SERVER\") | (col(\"SOURCE_TYPE\") == \"AZURE_SQL_MI\")) & (col(\"DATA_TYPE\") == \"timestamp\"),\"varbinary(8)\").otherwise(df[\"DATA_TYPE\"]))\n",
 					"\n",
 					"    # Double the length of 'nvarchar' columns if length is >= 1000\n",
 					"    df = df.withColumn(\"CHARACTER_MAXIMUM_LENGTH\", when((col(\"CHARACTER_MAXIMUM_LENGTH\").cast(\"bigint\") >= 1000) & (col(\"DATA_TYPE\") == \"nvarchar\"), (col(\"CHARACTER_MAXIMUM_LENGTH\") * 2).cast(\"string\")).otherwise(df[\"CHARACTER_MAXIMUM_LENGTH\"]))\n",
