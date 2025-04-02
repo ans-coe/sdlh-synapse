@@ -1,0 +1,37 @@
+{
+	"name": "sdlh_gen2_parquet_folder",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "datalake_data_azir",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FP0": {
+				"type": "string"
+			},
+			"FP1": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"folderPath": {
+					"value": "@dataset().FP1",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().FP0",
+					"type": "Expression"
+				}
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	}
+}

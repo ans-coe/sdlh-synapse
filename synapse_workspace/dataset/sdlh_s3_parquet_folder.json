@@ -1,0 +1,72 @@
+{
+	"name": "sdlh_s3_parquet_folder",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "s3_bucket_data_shir",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FP0": {
+				"type": "string"
+			},
+			"FP1": {
+				"type": "string"
+			},
+			"ACCESS_KEY_ID": {
+				"type": "string"
+			},
+			"ACCESS_KEY_SECRET": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "SDLH"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AmazonS3Location",
+				"bucketName": {
+					"value": "@dataset().FP0",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().FP1",
+					"type": "Expression"
+				}
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": [
+			{
+				"name": "Op",
+				"type": "UTF8"
+			},
+			{
+				"name": "_timestamp",
+				"type": "UTF8"
+			},
+			{
+				"name": "id",
+				"type": "INT64"
+			},
+			{
+				"name": "app",
+				"type": "UTF8"
+			},
+			{
+				"name": "name",
+				"type": "UTF8"
+			},
+			{
+				"name": "applied",
+				"type": "TIMESTAMP_MICROS"
+			},
+			{
+				"name": "_replication_sequence",
+				"type": "UTF8"
+			}
+		]
+	}
+}
