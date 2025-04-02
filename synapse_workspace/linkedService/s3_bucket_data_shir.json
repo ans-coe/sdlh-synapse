@@ -1,0 +1,46 @@
+{
+	"name": "s3_bucket_data_shir",
+	"properties": {
+		"description": "S3 bucket linked service.",
+		"parameters": {
+			"ACCESS_KEY_ID": {
+				"type": "string"
+			},
+			"ACCESS_KEY_SECRET": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "AmazonS3",
+		"typeProperties": {
+			"serviceUrl": "https://s3.amazonaws.com",
+			"accessKeyId": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().ACCESS_KEY_ID",
+					"type": "Expression"
+				}
+			},
+			"secretAccessKey": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "keyvault_data_azir",
+					"type": "LinkedServiceReference"
+				},
+				"secretName": {
+					"value": "@linkedService().ACCESS_KEY_SECRET",
+					"type": "Expression"
+				}
+			},
+			"authenticationType": "AccessKey"
+		},
+		"connectVia": {
+			"referenceName": "shir-dcoe-data-uksouth-002",
+			"type": "IntegrationRuntimeReference"
+		}
+	}
+}

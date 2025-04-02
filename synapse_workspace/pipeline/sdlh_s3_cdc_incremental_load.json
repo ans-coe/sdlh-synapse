@@ -1,0 +1,1286 @@
+{
+	"name": "sdlh_s3_cdc_incremental_load",
+	"properties": {
+		"activities": [
+			{
+				"name": "lookup_tables_cdc",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is WATERMARK.  ( If LAST_WATERMARK_VALUE IS NULL it uses datetime value of '1900-01-01 00:00:00' to simulate a first run scenario )",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "lookup_pipeline_parameters",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',DATABASE_NAME,'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[WATERMARK_COLUMN]\n    ,CASE\n        WHEN LAST_WATERMARK_VALUE IS NULL THEN '1900-01-01 00:00:00'\n        ELSE LAST_WATERMARK_VALUE\n    END AS LAST_WATERMARK_VALUE\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND [LOAD_TYPE] = 'CDC'\nAND [LAST_WATERMARK_VALUE] IS NOT NULL",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "for_each_table_watermark",
+				"description": "This for loop iterates through the each required item from ETL.SQLTableMetadata and copies required data from source to datalake RAW",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "lookup_tables_cdc",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('lookup_tables_cdc').output.value",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "lookup_object_metadata_watermark",
+							"description": "This lookup executes a stored procedure which returns object data from ETL.JsonMetadata from a supplied OBJECT_NAME",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ETL].[usp_GetPipelineMetadataRetrieval]",
+									"storedProcedureParameters": {
+										"PARAM_DATETIME": {
+											"type": "DateTime",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_DATETIME",
+												"type": "Expression"
+											}
+										},
+										"PARAM_OBJECT_NAME": {
+											"type": "String",
+											"value": {
+												"value": "@replace(item().OBJECT_NAME, '-', '_')",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_GROUPING_ID": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_SYSTEM": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+												"type": "Expression"
+											}
+										},
+										"PARAM_SOURCE_TYPE": {
+											"type": "String",
+											"value": {
+												"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "sdlh_azuresql_db_metadata",
+									"type": "DatasetReference",
+									"parameters": {
+										"METADATA_TABLE_NAME": "NA"
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "if_new_cdc_records_present",
+							"description": "Check if the table has any updates before executing the required activities.",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "lookup_cdc_data",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@or(and(greater(length(activity('lookup_cdc_data').output.childItems), 0), not(contains(string(activity('lookup_cdc_data').output.childItems), 'LOAD00000001.parquet'))), and(greater(length(activity('lookup_cdc_data').output.childItems),1), contains(string(activity('lookup_cdc_data').output.childItems), 'LOAD00000001.parquet')))",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "create_log_entry_no_action_required",
+										"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+												"storedProcedureParameters": {
+													"SOURCE_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_SYSTEM": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_GROUPING_ID": {
+														"type": "Int32",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+															"type": "Expression"
+														}
+													},
+													"OBJECT_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().OBJECT_NAME",
+															"type": "Expression"
+														}
+													},
+													"DATABASE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().DATABASE_NAME",
+															"type": "Expression"
+														}
+													},
+													"SCHEMA_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().SCHEMA_NAME",
+															"type": "Expression"
+														}
+													},
+													"TABLE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().TABLE_NAME",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@pipeline().TriggerTime",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerType",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_NAME",
+															"type": "Expression"
+														}
+													},
+													"OPERATION": {
+														"type": "String",
+														"value": "No Action Required"
+													},
+													"COMPONENT_NAME": {
+														"type": "String",
+														"value": "copy_s3_to_raw_watermark"
+													},
+													"TARGET_SYSTEM": {
+														"type": "String",
+														"value": null
+													},
+													"START_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"END_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"DURATION_SECONDS": {
+														"type": "Int32",
+														"value": null
+													},
+													"INSERTS": {
+														"type": "Int32",
+														"value": null
+													},
+													"UPDATES": {
+														"type": "Int32",
+														"value": null
+													},
+													"DELETES": {
+														"type": "Int32",
+														"value": null
+													},
+													"ERROR_MESSAGE": {
+														"type": "String",
+														"value": null
+													},
+													"NEW_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": null
+													},
+													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": null
+													}
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
+										}
+									}
+								],
+								"ifTrueActivities": [
+									{
+										"name": "post_table_to_storage_queue_watermark",
+										"description": "POST the table name into the Azure Storage Queue. ",
+										"type": "WebActivity",
+										"dependsOn": [
+											{
+												"activity": "update_etl_log_on_success_incremental_load",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"method": "POST",
+											"headers": {
+												"x-ms-version": "2021-04-10",
+												"x-ms-date": {
+													"value": "@formatDateTime(utcnow(),'r')",
+													"type": "Expression"
+												}
+											},
+											"url": {
+												"value": "@concat('https://', pipeline().parameters.PARAM_QUEUE_STORAGE_ACCOUNT, '.queue.core.windows.net/', pipeline().parameters.PARAM_QUEUE_NAME, '/messages?visibilitytimeout=30&timeout=30')",
+												"type": "Expression"
+											},
+											"body": {
+												"value": "@concat('<QueueMessage><MessageText>', item().TABLE_NAME, '</MessageText></QueueMessage>')",
+												"type": "Expression"
+											},
+											"authentication": {
+												"type": "MSI",
+												"resource": "https://storage.azure.com/"
+											}
+										}
+									},
+									{
+										"name": "copy_s3_to_parquet_raw_cdc",
+										"description": "Copy activity that takes SQL server tables and writes them as Parquet in the RAW hierarchical namespace within ADLS.",
+										"type": "Copy",
+										"dependsOn": [
+											{
+												"activity": "delete_todays_load_if_exists",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 2,
+											"retryIntervalInSeconds": 60,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "ParquetSource",
+												"storeSettings": {
+													"type": "AmazonS3ReadSettings",
+													"recursive": true,
+													"modifiedDatetimeStart": {
+														"value": "@{formatDateTime(addDays(item().LAST_WATERMARK_VALUE,-1), 'yyyy-MM-dd HH:mm:ss.fffffffZ')}",
+														"type": "Expression"
+													},
+													"modifiedDatetimeEnd": {
+														"value": "@{formatDateTime(pipeline().parameters.PARAM_DATETIME,'yyyy-MM-dd HH:mm:ss.fffffffZ')}",
+														"type": "Expression"
+													},
+													"wildcardFolderPath": {
+														"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].landing[0].FP1",
+														"type": "Expression"
+													},
+													"wildcardFileName": "*.parquet",
+													"enablePartitionDiscovery": false
+												},
+												"formatSettings": {
+													"type": "ParquetReadSettings"
+												}
+											},
+											"sink": {
+												"type": "ParquetSink",
+												"storeSettings": {
+													"type": "AzureBlobFSWriteSettings",
+													"copyBehavior": "PreserveHierarchy"
+												},
+												"formatSettings": {
+													"type": "ParquetWriteSettings"
+												}
+											},
+											"enableStaging": false,
+											"translator": {
+												"type": "TabularTranslator",
+												"typeConversion": true,
+												"typeConversionSettings": {
+													"allowDataTruncation": true,
+													"treatBooleanAsNumber": false
+												}
+											}
+										},
+										"inputs": [
+											{
+												"referenceName": "sdlh_s3_parquet_folder",
+												"type": "DatasetReference",
+												"parameters": {
+													"FP0": {
+														"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].landing[0].FP0",
+														"type": "Expression"
+													},
+													"FP1": {
+														"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].landing[0].FP1",
+														"type": "Expression"
+													},
+													"ACCESS_KEY_ID": {
+														"value": "@split(json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[0]",
+														"type": "Expression"
+													},
+													"ACCESS_KEY_SECRET": {
+														"value": "@split(json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[1]",
+														"type": "Expression"
+													}
+												}
+											}
+										],
+										"outputs": [
+											{
+												"referenceName": "sdlh_gen2_parquet_folder",
+												"type": "DatasetReference",
+												"parameters": {
+													"FP0": {
+														"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+														"type": "Expression"
+													},
+													"FP1": {
+														"value": "@concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									},
+									{
+										"name": "update_etl_log_on_success_incremental_load",
+										"description": "Executes a stored procedure to update on success",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "lookup_all_gen2_files_count",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[ETL].[usp_UpdateLog]",
+											"storedProcedureParameters": {
+												"DELETES": {
+													"value": null,
+													"type": "Int32"
+												},
+												"DURATION_SECONDS": {
+													"value": {
+														"value": "@activity('copy_s3_to_parquet_raw_cdc').output.copyDuration",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"END_TIME": {
+													"value": {
+														"value": "@utcnow()",
+														"type": "Expression"
+													},
+													"type": "DateTime"
+												},
+												"ERROR_MESSAGE": {
+													"value": null,
+													"type": "String"
+												},
+												"LOG_ID": {
+													"value": {
+														"value": "@activity('create_log_entry_cdc_incremental_load').output.value[0].LOG_ID",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"INSERTS": {
+													"value": null,
+													"type": "Int32"
+												},
+												"UPDATES": {
+													"value": null,
+													"type": "Int32"
+												},
+												"COUNT_LOGS": {
+													"value": {
+														"value": "@activity('lookup_all_gen2_files_count').output.firstRow.COUNTS_VALIDATION_JSON",
+														"type": "Expression"
+													},
+													"type": "String"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "azure_sql_data_no_param_azir",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "update_etl_log_on_failure_incremental_load",
+										"description": "Executes a stored procedure to update on failure.",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "copy_s3_to_parquet_raw_cdc",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[ETL].[usp_UpdateLog]",
+											"storedProcedureParameters": {
+												"DELETES": {
+													"value": null,
+													"type": "Int32"
+												},
+												"DURATION_SECONDS": {
+													"value": {
+														"value": "@activity('copy_s3_to_parquet_raw_cdc').output.copyDuration",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"END_TIME": {
+													"value": {
+														"value": "@utcnow()",
+														"type": "Expression"
+													},
+													"type": "DateTime"
+												},
+												"ERROR_MESSAGE": {
+													"value": {
+														"value": "@{activity('copy_s3_to_parquet_raw_cdc').output.errors[0]?.Message}",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"LOG_ID": {
+													"value": {
+														"value": "@activity('create_log_entry_cdc_incremental_load').output.value[0].LOG_ID",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"INSERTS": {
+													"value": null,
+													"type": "Int32"
+												},
+												"UPDATES": {
+													"value": null,
+													"type": "Int32"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "azure_sql_data_no_param_azir",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "create_log_entry_cdc_incremental_load",
+										"description": "This lookup runs a stored procedure which generates a log entry in the ETL.Log table.",
+										"type": "Lookup",
+										"dependsOn": [],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "AzureSqlSource",
+												"sqlReaderStoredProcedureName": "[ETL].[usp_InsertLog]",
+												"storedProcedureParameters": {
+													"SOURCE_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_TYPE",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_SYSTEM": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_SYSTEM",
+															"type": "Expression"
+														}
+													},
+													"SOURCE_GROUPING_ID": {
+														"type": "Int32",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_SOURCE_GROUPING_ID",
+															"type": "Expression"
+														}
+													},
+													"OBJECT_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@replace(item().OBJECT_NAME, '-', '_')\n\n",
+															"type": "Expression"
+														}
+													},
+													"DATABASE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().DATABASE_NAME",
+															"type": "Expression"
+														}
+													},
+													"SCHEMA_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().SCHEMA_NAME",
+															"type": "Expression"
+														}
+													},
+													"TABLE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@item().TABLE_NAME",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@pipeline().TriggerTime",
+															"type": "Expression"
+														}
+													},
+													"TRIGGER_TYPE": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().TriggerType",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().RunId",
+															"type": "Expression"
+														}
+													},
+													"PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().Pipeline",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_RUN_ID": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_RUN_ID",
+															"type": "Expression"
+														}
+													},
+													"TRIGGERING_PIPELINE_NAME": {
+														"type": "String",
+														"value": {
+															"value": "@pipeline().parameters.PARAM_TRIGGERING_PIPELINE_NAME",
+															"type": "Expression"
+														}
+													},
+													"OPERATION": {
+														"type": "String",
+														"value": "Copy Activity"
+													},
+													"COMPONENT_NAME": {
+														"type": "String",
+														"value": "copy_s3_to_parquet_raw_cdc"
+													},
+													"TARGET_SYSTEM": {
+														"type": "String",
+														"value": "ADLS_RAW"
+													},
+													"START_TIME": {
+														"type": "DateTime",
+														"value": {
+															"value": "@utcnow()",
+															"type": "Expression"
+														}
+													},
+													"END_TIME": {
+														"type": "DateTime",
+														"value": null
+													},
+													"DURATION_SECONDS": {
+														"type": "Int32",
+														"value": null
+													},
+													"INSERTS": {
+														"type": "Int32",
+														"value": null
+													},
+													"UPDATES": {
+														"type": "Int32",
+														"value": null
+													},
+													"DELETES": {
+														"type": "Int32",
+														"value": null
+													},
+													"ERROR_MESSAGE": {
+														"type": "String",
+														"value": null
+													},
+													"NEW_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": {
+															"value": "@formatDateTime(pipeline().parameters.PARAM_DATETIME, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
+															"type": "Expression"
+														}
+													},
+													"PREVIOUS_INCREMENTAL_KEY_VALUE": {
+														"type": "String",
+														"value": {
+															"value": "@formatDateTime(item().LAST_WATERMARK_VALUE, 'yyyy-MM-dd HH:mm:ss.fffffffZ')",
+															"type": "Expression"
+														}
+													}
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "sdlh_azuresql_db_metadata",
+												"type": "DatasetReference",
+												"parameters": {
+													"METADATA_TABLE_NAME": "NA"
+												}
+											},
+											"firstRowOnly": false
+										}
+									},
+									{
+										"name": "update_etl_log_on_failure_incremental_load_try2",
+										"description": "Executes a stored procedure to update on failure.",
+										"type": "SqlServerStoredProcedure",
+										"dependsOn": [
+											{
+												"activity": "update_etl_log_on_failure_incremental_load",
+												"dependencyConditions": [
+													"Failed"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"storedProcedureName": "[ETL].[usp_UpdateLog]",
+											"storedProcedureParameters": {
+												"DELETES": {
+													"value": null,
+													"type": "Int32"
+												},
+												"DURATION_SECONDS": {
+													"value": null,
+													"type": "Int32"
+												},
+												"END_TIME": {
+													"value": {
+														"value": "@utcnow()",
+														"type": "Expression"
+													},
+													"type": "DateTime"
+												},
+												"ERROR_MESSAGE": {
+													"value": {
+														"value": "@activity('copy_s3_to_parquet_raw_cdc').error?.message",
+														"type": "Expression"
+													},
+													"type": "String"
+												},
+												"LOG_ID": {
+													"value": {
+														"value": "@activity('create_log_entry_cdc_incremental_load').output.value[0].LOG_ID",
+														"type": "Expression"
+													},
+													"type": "Int32"
+												},
+												"INSERTS": {
+													"value": null,
+													"type": "Int32"
+												},
+												"UPDATES": {
+													"value": null,
+													"type": "Int32"
+												}
+											}
+										},
+										"linkedServiceName": {
+											"referenceName": "azure_sql_data_no_param_azir",
+											"type": "LinkedServiceReference"
+										}
+									},
+									{
+										"name": "evolve_gen2_incremental_file_schema",
+										"type": "ExecuteDataFlow",
+										"dependsOn": [
+											{
+												"activity": "delete_full_load_file_if_exists",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataflow": {
+												"referenceName": "sdlh_adls_parquet_folder_to_schema_evolved_file",
+												"type": "DataFlowReference",
+												"parameters": {
+													"TABLE_NAME": {
+														"value": "'@{json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}'",
+														"type": "Expression"
+													}
+												},
+												"datasetParameters": {
+													"AdlsParquetFilesData": {
+														"FP0": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+														"FP1": "@concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)"
+													},
+													"AdlsParquetMergedData": {
+														"FP0": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+														"FP1": "@concat(json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)",
+														"OBJECT_NAME": "@json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME"
+													}
+												}
+											},
+											"compute": {
+												"coreCount": 8,
+												"computeType": "General"
+											},
+											"traceLevel": "Fine"
+										}
+									},
+									{
+										"name": "lookup_all_gen2_files_count",
+										"type": "Lookup",
+										"dependsOn": [
+											{
+												"activity": "evolve_gen2_incremental_file_schema",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"source": {
+												"type": "SqlDWSource",
+												"sqlReaderQuery": {
+													"value": "with cte_gen2_all_files_count as (\n    SELECT\n    '@{json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}' AS TABLE_NAME,\n    count(*) AS ALL_FILES_GEN2_COUNT\nFROM\n    OPENROWSET(\n        BULK 'https://@{activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME}.dfs.core.windows.net/@{json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0}/@{concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)}/**',\n        FORMAT = 'PARQUET'\n    ) AS [result])\n\n,cte_gen2_merged_files_count as(\n    SELECT\n    '@{json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}' AS TABLE_NAME,\n    count(*) AS MERGED_FILES_GEN2_COUNT\nFROM\n    OPENROWSET(\n        BULK 'https://@{activity('lookup_pipeline_parameters').output.firstRow.DATALAKE_STORAGE_NAME}.dfs.core.windows.net/@{json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0}/@{concat(json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)}/@{json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].TABLE_NAME}.parquet',\n        FORMAT = 'PARQUET'\n    ) AS [result]\n)\n\nSELECT '@{length(activity('lookup_cdc_data').output.childItems)}' AS S3_FILES_COUNT,\n'@{length(activity('get_gen2_files_count').output.childItems)}' AS GEN2_FILES_COUNT,\ncte_gen2_all_files_count.ALL_FILES_GEN2_COUNT AS ALL_FILES_GEN2_RECORD_COUNT,\ncte_gen2_merged_files_count.MERGED_FILES_GEN2_COUNT AS MERGED_FILES_GEN2_RECORD_COUNT,\nCASE WHEN cast(cte_gen2_all_files_count.ALL_FILES_GEN2_COUNT AS INT) = CAST(cte_gen2_merged_files_count.MERGED_FILES_GEN2_COUNT AS INT) \nAND CAST('@{length(activity('get_gen2_files_count').output.childItems)}' AS INT) = CAST('@{length(activity('lookup_cdc_data').output.childItems)}' AS INT) \nTHEN 'TRUE'\nELSE 'FALSE' END AS RECORD_AND_FILES_COUNTS_MATCH,\n\n    '{' +\n    '\"S3_FILES_COUNT\": \"' + '@{length(activity('lookup_cdc_data').output.childItems)}' + '\",' + \n    '\"GEN2_FILES_COUNT\": \"' + '@{length(activity('get_gen2_files_count').output.childItems)}' + '\",' +\n    '\"ALL_FILES_GEN2_RECORD_COUNT\": \"' + CAST(cte_gen2_all_files_count.ALL_FILES_GEN2_COUNT AS VARCHAR) + '\",' +\n    '\"MERGED_FILES_GEN2_RECORD_COUNT\": \"' + CAST(cte_gen2_merged_files_count.MERGED_FILES_GEN2_COUNT AS VARCHAR) + '\",' +\n    '\"RECORD_AND_FILES_COUNTS_MATCH\": \"' + \n    CASE \n        WHEN CAST(cte_gen2_all_files_count.ALL_FILES_GEN2_COUNT AS INT) = CAST(cte_gen2_merged_files_count.MERGED_FILES_GEN2_COUNT AS INT) \n        AND CAST('@{length(activity('get_gen2_files_count').output.childItems)}' AS INT) = CAST('@{length(activity('lookup_cdc_data').output.childItems)}' AS INT) \n        THEN 'TRUE'\n        ELSE 'FALSE' \n    END + '\"' +\n    '}' AS COUNTS_VALIDATION_JSON\n\nfrom cte_gen2_all_files_count, cte_gen2_merged_files_count\nWHERE \ncte_gen2_all_files_count.TABLE_NAME = cte_gen2_merged_files_count.TABLE_NAME\n",
+													"type": "Expression"
+												},
+												"queryTimeout": "02:00:00",
+												"partitionOption": "None"
+											},
+											"dataset": {
+												"referenceName": "serverless_metadata",
+												"type": "DatasetReference"
+											},
+											"firstRowOnly": true
+										}
+									},
+									{
+										"name": "get_gen2_files_count",
+										"type": "GetMetadata",
+										"dependsOn": [
+											{
+												"activity": "copy_s3_to_parquet_raw_cdc",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "sdlh_gen2_parquet_folder",
+												"type": "DatasetReference",
+												"parameters": {
+													"FP0": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+													"FP1": {
+														"value": "@concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)",
+														"type": "Expression"
+													}
+												}
+											},
+											"fieldList": [
+												"childItems"
+											],
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "ParquetReadSettings"
+											}
+										}
+									},
+									{
+										"name": "delete_full_load_file_if_exists",
+										"type": "Delete",
+										"dependsOn": [
+											{
+												"activity": "get_gen2_files_count",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "gen2_parquet_snappy_shir",
+												"type": "DatasetReference",
+												"parameters": {
+													"FP0": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+													"FP1": "@concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)",
+													"OBJECT_NAME": "LOAD00000001"
+												}
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											}
+										}
+									},
+									{
+										"name": "delete_todays_load_if_exists",
+										"type": "Delete",
+										"dependsOn": [
+											{
+												"activity": "create_log_entry_cdc_incremental_load",
+												"dependencyConditions": [
+													"Succeeded"
+												]
+											}
+										],
+										"policy": {
+											"timeout": "0.12:00:00",
+											"retry": 0,
+											"retryIntervalInSeconds": 30,
+											"secureOutput": false,
+											"secureInput": false
+										},
+										"userProperties": [],
+										"typeProperties": {
+											"dataset": {
+												"referenceName": "sdlh_gen2_parquet_folder",
+												"type": "DatasetReference",
+												"parameters": {
+													"FP0": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP0",
+													"FP1": "@concat('s3_all_files/',json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].raw[0].FP1, activity('lookup_object_metadata_watermark').output.firstRow.HNS)"
+												}
+											},
+											"enableLogging": false,
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											}
+										}
+									}
+								]
+							}
+						},
+						{
+							"name": "lookup_cdc_data",
+							"type": "GetMetadata",
+							"dependsOn": [
+								{
+									"activity": "lookup_object_metadata_watermark",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"dataset": {
+									"referenceName": "sdlh_s3_parquet_folder",
+									"type": "DatasetReference",
+									"parameters": {
+										"FP0": {
+											"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].landing[0].FP0",
+											"type": "Expression"
+										},
+										"FP1": {
+											"value": "@json(activity('lookup_object_metadata_watermark').output.firstRow.ADLS_PATHS)[0].landing[0].FP1",
+											"type": "Expression"
+										},
+										"ACCESS_KEY_ID": {
+											"value": "@split(json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[0]",
+											"type": "Expression"
+										},
+										"ACCESS_KEY_SECRET": {
+											"value": "@split(json(activity('lookup_object_metadata_watermark').output.firstRow.OBJECT_PARAMETERS)[0].SOURCE_CONNECTION_STRING, ',')[1]",
+											"type": "Expression"
+										}
+									}
+								},
+								"fieldList": [
+									"childItems"
+								],
+								"storeSettings": {
+									"type": "AmazonS3ReadSettings",
+									"recursive": true,
+									"modifiedDatetimeStart": {
+										"value": "@{formatDateTime(addDays(item().LAST_WATERMARK_VALUE,-1), 'yyyy-MM-dd HH:mm:ss.fffffffZ')}",
+										"type": "Expression"
+									},
+									"modifiedDatetimeEnd": {
+										"value": "@{formatDateTime(pipeline().parameters.PARAM_DATETIME,'yyyy-MM-dd HH:mm:ss.fffffffZ')}",
+										"type": "Expression"
+									},
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "ParquetReadSettings"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_pipeline_parameters",
+				"description": "On serverless metadata database: Execute the stored procedure Config.usp_GetPipelineParameters to return the pipeline parameters.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderStoredProcedureName": "[Config].[usp_GetPipelineParameters]",
+						"storedProcedureParameters": {
+							"Workspace": {
+								"type": "String",
+								"value": {
+									"value": "@pipeline().DataFactory",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "serverless_metadata",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "if_mismatching_counts",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "lookup_mismatching_counts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@greater(activity('lookup_mismatching_counts').output.count,0)",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "fail_pipeline",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Pipeline has failed due to mismatching counts.",
+								"errorCode": "500"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "lookup_mismatching_counts",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "for_each_table_watermark",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT \n    LOG_ID, \n    PIPELINE_RUN_ID, \n    TABLE_NAME, \n    COUNT_LOGS\nFROM \n    ETL.Log\nWHERE \n    PIPELINE_RUN_ID = '@{pipeline().RunId}'\n    AND CAST(JSON_VALUE([COUNT_LOGS], '$.RECORD_AND_FILES_COUNTS_MATCH') AS VARCHAR) = 'FALSE'\nORDER BY \n    LOG_ID DESC;",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			}
+		],
+		"parameters": {
+			"PARAM_SOURCE_TYPE": {
+				"type": "string",
+				"defaultValue": "S3_BUCKET"
+			},
+			"PARAM_SOURCE_SYSTEM": {
+				"type": "string",
+				"defaultValue": "KRAKEN_S3_BUCKET"
+			},
+			"PARAM_SOURCE_GROUPING_ID": {
+				"type": "int",
+				"defaultValue": 99
+			},
+			"PARAM_QUEUE_STORAGE_ACCOUNT": {
+				"type": "string",
+				"defaultValue": "dlscfldatadevuks001"
+			},
+			"PARAM_QUEUE_NAME": {
+				"type": "string",
+				"defaultValue": "etl-queue-4dc4097e-5a3d-4118-b843-8c250fe8faec"
+			},
+			"PARAM_DATETIME": {
+				"type": "string",
+				"defaultValue": "2024-10-03T00:00:00.2919349Z"
+			},
+			"PARAM_TRIGGERING_PIPELINE_NAME": {
+				"type": "string",
+				"defaultValue": "na"
+			},
+			"PARAM_TRIGGERING_PIPELINE_RUN_ID": {
+				"type": "string",
+				"defaultValue": "na"
+			}
+		},
+		"folder": {
+			"name": "SDLH/S3_Bucket/Support"
+		},
+		"annotations": [],
+		"lastPublishTime": "2023-03-03T16:57:45Z"
+	}
+}

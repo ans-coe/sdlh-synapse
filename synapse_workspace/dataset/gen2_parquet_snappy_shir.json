@@ -1,0 +1,41 @@
+{
+	"name": "gen2_parquet_snappy_shir",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "datalake_data_azir",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"FP0": {
+				"type": "string"
+			},
+			"FP1": {
+				"type": "string"
+			},
+			"OBJECT_NAME": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@concat(dataset().OBJECT_NAME,'.parquet')",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().FP1",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().FP0",
+					"type": "Expression"
+				}
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	}
+}

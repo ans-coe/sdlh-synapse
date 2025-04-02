@@ -1,0 +1,57 @@
+{
+	"name": "sdlh_adls_parquet_folder_to_schema_evolved_file",
+	"properties": {
+		"description": "Takes in an ADLS folder containing a multitude of parquets with evolving schemas. It outputs a single parquet file with the evolved final schema. Fills in NULLs for the columns that didn't exist previously. ",
+		"folder": {
+			"name": "SDLH/Common"
+		},
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_parquet_folder",
+						"type": "DatasetReference"
+					},
+					"name": "AdlsParquetFilesData"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "sdlh_gen2_parquet_snappy",
+						"type": "DatasetReference"
+					},
+					"name": "AdlsParquetMergedData",
+					"rejectedDataLinkedService": {
+						"referenceName": "datalake_data_azir",
+						"type": "LinkedServiceReference"
+					}
+				}
+			],
+			"transformations": [],
+			"scriptLines": [
+				"parameters{",
+				"     TABLE_NAME as string",
+				"}",
+				"source(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     inferDriftedColumnTypes: true,",
+				"     ignoreNoFilesFound: false,",
+				"     format: 'parquet',",
+				"     partitionBy('hash', 1)) ~> AdlsParquetFilesData",
+				"AdlsParquetFilesData sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     format: 'parquet',",
+				"     partitionFileNames:[(concat($TABLE_NAME, '.parquet'))],",
+				"     truncate: true,",
+				"     umask: 0022,",
+				"     preCommands: [],",
+				"     postCommands: [],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     partitionBy('hash', 1)) ~> AdlsParquetMergedData"
+			]
+		}
+	}
+}
