@@ -12,6 +12,12 @@
 						"dependencyConditions": [
 							"Succeeded"
 						]
+					},
+					{
+						"activity": "lookup_tables_full_load_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
 					}
 				],
 				"userProperties": [],
@@ -681,6 +687,39 @@
 			},
 			{
 				"name": "lookup_tables_full_load",
+				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is FULL_LOAD or CHANGE_TRACKING where LAST_CHANGE_TRACKING_VALUE IS NULL",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "SELECT [SOURCE_TYPE]\n    ,[SOURCE_SYSTEM]\n    ,[SOURCE_CONNECTION_STRING]\n    ,[DATABASE_NAME]\n    ,[SCHEMA_NAME]\n    ,[TABLE_NAME]\n    ,[COLUMNS_META]\n    ,LOWER(REPLACE(CONCAT(SOURCE_TYPE,'_',SOURCE_SYSTEM,'_',REPLACE(DATABASE_NAME, '-','_'),'_', SCHEMA_NAME,'_',TABLE_NAME),' ', '')) AS [OBJECT_NAME]\n    ,[LOAD_TYPE]\nFROM [ETL].[SQLTableMetadata]\nWHERE [SOURCE_TYPE] = '@{pipeline().parameters.PARAM_SOURCE_TYPE}'\nAND [SOURCE_SYSTEM] = '@{pipeline().parameters.PARAM_SOURCE_SYSTEM}'\nAND [SOURCE_GROUPING_ID] = @{pipeline().parameters.PARAM_SOURCE_GROUPING_ID}\nAND [IS_Enabled] = 1\nAND ( [LOAD_TYPE] = 'FULL_LOAD' OR ( [LOAD_TYPE] = 'CDC' AND [LAST_WATERMARK_VALUE] IS NULL) )",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "sdlh_azuresql_db_metadata",
+						"type": "DatasetReference",
+						"parameters": {
+							"METADATA_TABLE_NAME": "NA"
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "lookup_tables_full_load_copy1",
 				"description": "Runs a query on Metadata DB to retrieve required items for supplied SOURCE_SYSTEM & PARAM_SOURCE_GROUPING_ID.  Its returns any enabled Tables where LOAD_TYPE is FULL_LOAD or CHANGE_TRACKING where LAST_CHANGE_TRACKING_VALUE IS NULL",
 				"type": "Lookup",
 				"dependsOn": [],
